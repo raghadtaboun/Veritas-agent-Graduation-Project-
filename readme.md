@@ -4,8 +4,6 @@
 > **نظام وكلاء الذكاء الاصطناعي للتحقق من الأخبار العربية وتحليل الانحياز الإعلامي**
 >
 > Graduation Project — Multi-Agent System + Model Context Protocol
->
-> **Architecture version:** Canonical MCP (post Phase 4.5 migration). See `docs/decisions/ADR-001-canonical-mcp-migration.md` for the migration rationale and `docs/archive/pre_canonical_mcp/` for the preserved original architecture.
 
 ---
 
