@@ -363,23 +363,3 @@ The system is evaluated on two dimensions in Phase 6:
 **Clustering correctness** — `evaluation/evaluate_clustering.py` runs the same dataset articles through the production clustering logic and verifies that the known same-event groups in `evaluation/clustering_ground_truth.json` are placed into a single cluster despite differing bias labels. Special attention is given to hard cases where same-event articles have different titles, testing semantic clustering over surface title matching.
 
 ---
-
-## Important Files to Read First
-
-If you are the AI coding agent, read these files in this order before writing any code:
-
-1. `readme.md` — you are here
-2. `blueprint.md` — architecture, data flow, and component boundaries
-3. `plan.md` — step-by-step implementation instructions
-4. `agent.md` — behavioral rules, coding standards, and the mandatory summary.md protocol
-5. `docs/decisions/ADR-001-canonical-mcp-migration.md` — why the architecture was restructured in Phase 4.5
-
----
-
-## Project Status
-
-Track implementation progress by checking the `summaries/` directory. Each completed phase has a `summary.md` file documenting what was built, any deviations, test results, and known issues. The absence of a `summary.md` for a phase means that phase is either in progress or not yet started.
-
-Phases that span multiple working sessions (currently Phase 4.5) additionally maintain a living `progress_log.md` alongside their eventual `summary.md` — see Rule 4.1.1 in `agent.md`. The progress log is the authoritative session-to-session handoff record during the phase; the `summary.md` is consolidated from it at phase closure.
-
-Phases 0 through 4 followed the original architecture (preserved in `docs/archive/pre_canonical_mcp/`). Phase 4.5 migrates the system to the canonical MCP pattern described above. Phases 5 and 6 continue from the canonical architecture.
