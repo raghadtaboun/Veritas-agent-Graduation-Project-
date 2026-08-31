@@ -1,18 +1,16 @@
 """
-tests/test_tools.py — MCP Tool Tests (Phase 4.5 canonical, 19 tools)
+tests/test_tools.py — MCP Tool Tests (15 tools)
 
-19 tests total — one per pure MCP tool exposed by ``mcp_server/server.py``:
+15 tests total — one per pure MCP tool exposed by ``mcp_server/server.py``.
+Only the tools actually consumed by the agents are retained:
 
   Tier-1 core tools (Phase 1)        :  fetch_gdelt, scrape_article,
                                         store_article, find_similar,
                                         cache_set, cache_get
-  Tier-2 advanced tools (Phase 4)    :  get_source_bias, get_coverage_stats,
-                                        detect_blindspot, vector_recommend,
-                                        get_user_profile
+  Tier-2 advanced tools (Phase 4)    :  detect_blindspot, vector_recommend
   Tier-3 pure data-access tools      :  get_articles, get_articles_for_event,
    (Phase 4.5 canonical migration)      insert_event, link_article_event,
                                         update_event_summary,
-                                        get_event_article_count,
                                         insert_bias_score,
                                         insert_blindspot_report
 
@@ -21,10 +19,7 @@ transport path (Rule 3.2). Tests use real PostgreSQL and Redis instances
 (Rule 3.3).
 
 The Phase 4.5 canonical migration (ADR-001) removed every LLM-embedded
-tool from the server, so none of these tests need LLM mocks. The
-remaining ``# MOCK`` marker is a single Redis pre-seed for
-``test_get_user_profile`` — it stages a fixture in the cache so the test
-exercises the read path (no external service is mocked).
+tool from the server, so none of these tests need LLM mocks.
 
 Prerequisites (must all be running before invoking pytest):
     - PostgreSQL 16 with pgvector  (port 5432)
@@ -454,73 +449,7 @@ def _cleanup_tier2(url_prefix: str, event_id: int | None = None) -> None:
         conn.close()
 
 
-# ── Test 11 — get_source_bias ─────────────────────────────────────────────────
-
-async def test_get_source_bias() -> None:
-    """
-    Calls get_source_bias with a domain that is seeded in the sources table
-    (aljazeera.net → pan_arab per infra/schema.sql) and verifies all fields.
-    Also tests that an unknown domain returns an error with bias_label=None.
-    No LLM or DB writes required.
-    """
-    # Known domain — seeded in schema.sql
-    async with _mcp() as s:
-        data = await _call(s, "get_source_bias", {"domain": "aljazeera.net"})
-
-    assert "error" not in data, f"unexpected error: {data.get('error')}"
-    assert "name"       in data, "response missing 'name'"
-    assert "domain"     in data, "response missing 'domain'"
-    assert "bias_label" in data, "response missing 'bias_label'"
-    assert data["domain"]     == "aljazeera.net"
-    assert data["bias_label"] == "pan_arab"
-    assert data["bias_label"] in VALID_BIAS_LABELS
-
-    # Unknown domain — must return error with bias_label=None
-    async with _mcp() as s:
-        unknown = await _call(
-            s, "get_source_bias",
-            {"domain": "no-such-domain-veritas-test.example.com"},
-        )
-
-    assert "error"      in unknown, "expected 'error' key for unknown domain"
-    assert unknown.get("bias_label") is None
-
-
-# ── Test 12 — get_coverage_stats ──────────────────────────────────────────────
-
-async def test_get_coverage_stats() -> None:
-    """
-    Inserts a test event and 3 articles with known bias labels
-    (2 pro_government, 1 opposition), calls get_coverage_stats,
-    and verifies the distribution matches the inserted data.
-    Cleans up after.
-    """
-    ts         = int(time.time())
-    url_prefix = f"{_TEST_URL_PREFIX}-covstats-{ts}"
-    event_id   = _insert_test_event(headline="Coverage Stats Test Event")
-
-    try:
-        aid1 = _insert_test_article(f"{url_prefix}-a1", label="pro_government")
-        aid2 = _insert_test_article(f"{url_prefix}-a2", label="pro_government")
-        aid3 = _insert_test_article(f"{url_prefix}-a3", label="opposition")
-        for aid in (aid1, aid2, aid3):
-            _link_article_to_event(aid, event_id)
-
-        async with _mcp() as s:
-            data = await _call(s, "get_coverage_stats", {"event_id": event_id})
-
-        assert "error" not in data, f"unexpected error: {data.get('error')}"
-        assert data["event_id"] == event_id,         "event_id mismatch"
-        assert "stats"          in data,              "response missing 'stats'"
-        assert "total"          in data,              "response missing 'total'"
-        assert data["total"]    == 3,                 "total should be 3"
-        assert data["stats"].get("pro_government") == 2, "expected 2 pro_government articles"
-        assert data["stats"].get("opposition")     == 1, "expected 1 opposition article"
-    finally:
-        _cleanup_tier2(url_prefix, event_id)
-
-
-# ── Test 13 — detect_blindspot ────────────────────────────────────────────────
+# ── Test 11 — detect_blindspot ────────────────────────────────────────────────
 
 async def test_detect_blindspot() -> None:
     """
@@ -647,50 +576,6 @@ async def test_vector_recommend() -> None:
         assert "error" in bad
     finally:
         _cleanup_tier2(url_prefix)
-
-
-# ── Test 16 — get_user_profile ────────────────────────────────────────────────
-
-async def test_get_user_profile() -> None:
-    """
-    Pre-seeds a user profile in Redis, calls get_user_profile via MCP,
-    and verifies the returned profile matches the seeded data.
-    Also verifies that a non-existent user returns a default empty profile.
-    No DB writes required.
-    """
-    user_id = f"test_user_veritas_{int(time.time())}"
-    mock_profile = {
-        "dominant_bias": "pan_arab",
-        "read_counts":   {"pan_arab": 5, "neutral": 2},
-    }
-    # MOCK — pre-seed user profile in Redis
-    _redis.setex(
-        f"user_profile:{user_id}",
-        _TEST_MOCK_TTL,
-        json.dumps(mock_profile),
-    )
-
-    async with _mcp() as s:
-        data = await _call(s, "get_user_profile", {"user_id": user_id})
-
-    assert "error"          not in data, f"unexpected error: {data.get('error')}"
-    assert data["user_id"]       == user_id
-    assert "dominant_bias"       in data
-    assert "read_counts"         in data
-    assert data["dominant_bias"] == "pan_arab"
-    assert data["read_counts"].get("pan_arab") == 5
-    assert data["read_counts"].get("neutral")  == 2
-
-    # Non-existent user → default empty profile
-    async with _mcp() as s:
-        empty = await _call(
-            s, "get_user_profile",
-            {"user_id": "no_such_user_veritas_xyz_000"},
-        )
-
-    assert empty["user_id"]       == "no_such_user_veritas_xyz_000"
-    assert empty["dominant_bias"] is None
-    assert empty["read_counts"]   == {}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -946,45 +831,7 @@ async def test_update_event_summary() -> None:
             conn.close()
 
 
-# ── Test 17 — get_event_article_count ────────────────────────────────────────
-
-async def test_get_event_article_count() -> None:
-    """
-    Seeds one event, links 3 articles, calls get_event_article_count, and
-    verifies count == 3. Also verifies count == 0 for a brand-new event
-    with no links.
-    """
-    ts = int(time.time())
-    url_prefix = f"{_TEST_URL_PREFIX}-evcount-{ts}"
-    event_id = _insert_test_event(headline="get_event_article_count Test")
-    empty_event = _insert_test_event(headline="Empty Event")
-
-    try:
-        for i in range(3):
-            aid = _insert_test_article(f"{url_prefix}-a{i}")
-            _link_article_to_event(aid, event_id)
-
-        async with _mcp() as s:
-            full = await _call(s, "get_event_article_count", {"event_id": event_id})
-        assert full == {"count": 3}, f"expected count=3, got {full}"
-
-        async with _mcp() as s:
-            empty = await _call(
-                s, "get_event_article_count", {"event_id": empty_event},
-            )
-        assert empty == {"count": 0}
-    finally:
-        _cleanup_tier2(url_prefix, event_id)
-        conn = psycopg2.connect(DB_URL)
-        try:
-            with conn:
-                cur = conn.cursor()
-                cur.execute("DELETE FROM events WHERE id = %s", (empty_event,))
-        finally:
-            conn.close()
-
-
-# ── Test 18 — insert_bias_score ──────────────────────────────────────────────
+# ── Test 17 — insert_bias_score ──────────────────────────────────────────────
 
 async def test_insert_bias_score() -> None:
     """

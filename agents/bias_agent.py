@@ -104,11 +104,11 @@ Compare all {n} articles and identify:
 
 Choose EXACTLY ONE label. Indicators per label:
 
-- pro_government — Supports or amplifies official Arab government authority.
+- pro_government — Supports or amplifies official government authority.
   Indicators: quotes official spokespeople; regime-favored terminology;
   frames protests as 'sedition'; emphasizes stability; downplays opposition.
 
-- opposition — Critiques or counters Arab government authority.
+- opposition — Critiques or counters government authority.
   Indicators: quotes dissidents; emphasizes regime failures, corruption,
   rights abuses; uses 'سلطوي', 'قمع'; foregrounds accountability demands.
 
@@ -158,12 +158,19 @@ Choose EXACTLY ONE label. Indicators per label:
 
 ═══ OUTPUT FORMAT ═══
 
-Return ONLY a JSON object — no markdown, no commentary, no preamble:
+Return ONLY a JSON object — no markdown, no commentary, no preamble. 
+You MUST complete your internal analysis inside the "analysis" field before micro-deciding the final label.
+
 {{
-  "score":      <float -1.0 to +1.0>,
-  "label":      "<one of: pro_government | opposition | neutral | pan_arab | western_aligned>",
-  "confidence": <float 0.0 to 1.0>,
-  "framing":    "<one Arabic sentence naming the source and citing specific evidence>"
+  "analysis": {{
+    "loaded_vocabulary": "<Brief note on found Arabic judgment words or 'none'>",
+    "sourcing_pattern": "<Who is quoted vs who is omitted>",
+    "emphasis_points": "<What was foregrounded in headline/lead>"
+  }},
+  "label": "<one of: pro_government | opposition | neutral | pan_arab | western_aligned>",
+  "score": <float -1.0 to +1.0. For 'neutral', score must be 0.0>,
+  "confidence": <float 0.0 to 1.0. High confidence is allowed for clear factual neutral reporting>,
+  "framing": "<one Arabic sentence naming the source and citing specific evidence>"
 }}
 """
 
@@ -179,74 +186,121 @@ sourcing, emphasis, and omission within the article itself.
 Title: {title}
 {content}
 
+═══ READING PRINCIPLES (apply BEFORE classifying) ═══
+
+1. EDITORIAL VOICE ONLY — separate the outlet's own narration from quoted actors.
+   The label reflects how the OUTLET frames events in its own words (narration,
+   word choice, emphasis, omission), NOT the opinions of people it quotes.
+   ▸ القاعدة: التقرير المحايد قد يقتبس تصريحات حادّة من مسؤول أو معارض
+     (مثل اتهام حكومةٍ لأخرى بـ'التدخّل'). هذه الكلمات تخصّ المُتحدِّث لا الصحيفة،
+     ويبقى المقال محايداً إذا عرض الأطراف بتوازن. لا تَنسب موقف المُقتبَس إلى المقال.
+
+2. ORIGIN ≠ LABEL — the outlet's nationality and the topic's geography do NOT
+   set the label. Classify the STANCE, not the source's passport.
+   ▸ القاعدة: مصدرٌ غربيّ ينتقد بشدّة حكومته أو زعيماً غربياً يعبّر عن موقف
+     نقديّ/معارض، لا عن انحياز غربيّ. وذِكرُ ساسة غربيين أو إسرائيليين أو إيرانيين
+     لا يحدّد التصنيف بذاته؛ العبرة بتبنّي الإطار من عدمه.
+
 ═══ STEP 1 — INTERNAL BIAS SIGNALS ═══
 
 Identify the following inside the article text:
 
-- LOADED VOCABULARY: Are 'العدوان', 'الإرهابيون', 'المقاومة', 'الشرعية',
-  'النظام', 'الإصلاحات', 'القمع' used in ways that imply judgment?
-- SOURCE SELECTION: Whom does the article quote (officials, opposition,
-  foreign govs, NGOs, anonymous sources, eyewitnesses)?
-- WHAT IS EMPHASIZED: Which facts open the article? Which appear in the
-  headline versus buried late in the body?
-- WHAT IS MISSING: Are obvious counter-perspectives or alternative
-  explanations absent?
-- IMPLICIT NARRATIVE: Who is positioned as legitimate vs illegitimate?
+- LOADED VOCABULARY (editorial voice only): judgment words in the reporter's
+  OWN narration — 'العدوان', 'الإرهابيون', 'المقاومة', 'الشرعية', 'النظام',
+  'الإصلاحات', 'القمع' — EXCLUDING words that appear inside quotations.
+- ATTRIBUTED vs EDITORIAL: which charged language sits inside quotes/attribution
+  ('قال', 'وفق', 'بحسب', 'أعلن') versus the outlet's own voice?
+- SOURCE SELECTION: whom does the article quote or center (officials, opposition,
+  foreign govs, NGOs, anonymous sources, eyewitnesses)? Is the coverage one-sided?
+- WHAT IS EMPHASIZED: which facts open the article / sit in the headline versus
+  buried late in the body?
+- WHAT IS MISSING: are obvious counter-perspectives or alternative explanations
+  absent?
+- POWER LOCUS: who holds authority in this context, and whom is the article
+  aligned for or against? (Disambiguates opposition vs pro_government direction.)
 
-═══ STEP 2 — CLASSIFY THE ARTICLE ═══
+═══ STEP 2 — LABEL DEFINITIONS ═══
 
-Choose EXACTLY ONE label. Indicators per label:
+Choose EXACTLY ONE label.
 
-- pro_government — Supports or amplifies official Arab government authority.
-  Indicators: quotes official spokespeople; regime-favored terminology;
-  frames protests as 'sedition'; emphasizes stability; downplays opposition.
+- pro_government — يقف صوتُ التحرير في موقع السلطة الرسمية القائمة ويعزّز شرعيتها.
+   المؤشرات: يجعل المصادر الرسمية المرجعَ الوحيد/الأبرز؛ يتبنّى مصطلحات النظام؛
+    يصوّر المعارضة أو الاحتجاج كتهديد ('فتنة'، 'عناصر'، 'مؤامرة')؛ يبرز الاستقرار والإنجاز.
+   ليس هذا التصنيف إذا: كان مجرّد نقلٍ لتصريح رسميّ داخل تغطية متوازنة تتضمّن الطرف الآخر (← neutral).
+   الفيصل: هل يتبنّى صوتُ التحرير شرعية السلطة، أم يكتفي بنقل موقفها؟
 
-- opposition — Critiques or counters Arab government authority.
-  Indicators: quotes dissidents; emphasizes regime failures, corruption,
-  rights abuses; uses 'سلطوي', 'قمع'; foregrounds accountability demands.
+- opposition — يقف ضدّ سلطةٍ حكومية داخلية محدّدة.
+   المؤشرات: يركّز على إخفاقات النظام والفساد والانتهاكات؛ يعتمد أصوات المعارضة والضحايا؛
+    مفردات تحرير مثل 'قمع'، 'سلطويّ'، 'استبداد'؛ يطالب بالمساءلة.
+   ليس هذا التصنيف إذا: كان الخصمُ قوّةً خارجية (غربية/أجنبية) لا حكومةً داخلية (← pan_arab)؛
+    أو كان النقدُ منسوباً لمتحدّثين فقط دون تبنٍّ تحريريّ (← قد يكون neutral).
+   الفيصل: مَن هدفُ النقد — حكومةٌ داخلية (opposition) أم قوّة خارجية (pan_arab)؟
 
-- neutral — Balanced without detectable political lean.
-  Indicators: cites multiple perspectives proportionally; descriptive
-  (not evaluative) language; reports facts without partisan framing.
+- neutral — توازن مُثبَت بدليلٍ إيجابي، لا مجرّد غياب انحياز وكذلك اذا تحدث عن حدث مسلم به فلا يمكن تصنيفه في المقابل.
+   يتحقّق فقط بالشروط الثلاثة معاً: (1) تمثيل متناسب لوجهات النظر،
+    و(2) معاملة متكافئة للأطراف دون تشريع طرفٍ وتجريم آخر،
+    و(3) أيّ شحنة لغوية منسوبة لمتحدّثين لا صادرة عن صوت التحرير.
+   ليس هذا التصنيف إذا: كانت النبرة هادئة/تحليلية فحسب؛ أو كان اختيار المصادر أحاديّاً
+    أو الطرف المقابل غائباً (حتى بلا مفردات مشحونة)؛ أو شُرِّع طرفٌ وجُرِّم آخر.
+   الفيصل: هل ثمّة دليلٌ إيجابيّ على التوازن، أم مجرّد غياب كلماتٍ حادّة؟
 
-- pan_arab — Reflects pan-Arab nationalist framing.
-  Indicators: 'الأمة العربية', 'القضية المركزية'; frames events as Arab
-  vs foreign powers; valorizes resistance; suspicious of Western/Israeli motives.
+- pan_arab — يتبنّى موقعَ المصلحة العربية الجامعة في مواجهة قوى خارجية.
+   المؤشرات: 'الأمة العربية'، 'القضية المركزية'؛ يؤطّر الحدث كصراعٍ عربيّ ضدّ تدخّل
+    غربيّ/إسرائيليّ؛ يثمّن المقاومة؛ يتوجّس من الدوافع الأجنبية.
+   ليس هذا التصنيف إذا: كان النقدُ موجّهاً لحكومةٍ عربية داخلية بعينها دون البُعد العربيّ الجامع (← opposition).
+   الفيصل: هل الخصمُ خارجيّ والمصلحةُ المُدافَع عنها عربيةٌ جامعة؟ (قد يظهر حتى لو كان سطح الموضوع أزمةً عربية داخلية).
 
-- western_aligned — Reflects Western institutional narratives.
-  Indicators: cites Western governments, think tanks, NGOs prominently;
-  uses human rights / democracy frames; treats Western policy as
-  default-legitimate; aligns with US/EU positions.
+- western_aligned — يتبنّى الإطارَ والمعايير المؤسساتية الغربية كمرجعيةٍ شرعية.
+   المؤشرات: يجعل الحكومات/المراكز/المنظمات الغربية المرجعَ البارز؛ يوظّف أطر حقوق الإنسان
+    والديمقراطية كمسلّمات؛ يعامل الموقف الأمريكي/الأوروبي كأمرٍ بديهيّ الشرعية؛
+    يركّز أصوات الطرف الغربي/الإسرائيلي ويُهمّش مقابلها.
+   ليس هذا التصنيف إذا: كان المصدرُ غربيّاً فقط؛ أو كان ينتقد ساسةً غربيين أو سياسةً غربية
+    (← opposition/نقديّ أو neutral بحسب التأطير).
+   الفيصل: هل يتبنّى صوتُ التحرير الإطارَ الغربيّ كمرجعية، أم يكتفي بتغطيته/نقده؟
+
+═══ DECISION RULES (tie-breakers) ═══
+
+Apply in order; stop at the first rule that resolves the case:
+
+R1. If charged language appears ONLY inside quotes and sides are presented
+    proportionally → neutral. (Never inherit a quoted speaker's stance.)
+R2. If LOADED VOCABULARY is 'none' BUT sourcing is one-sided or counter-views
+    are omitted → choose the leaning label, NOT neutral.
+R3. If the tone is calm/analytical BUT actors are legitimized/delegitimized
+    asymmetrically → choose the leaning label, NOT neutral.
+R4. If the article criticizes EXTERNAL/Western interference in defense of an
+    Arab or regional interest → pan_arab. If it criticizes a specific DOMESTIC
+    government → opposition.
+R5. A Western-sourced piece that criticizes Western actors is critical/opposition
+    or neutral by its framing — never western_aligned by origin alone.
 
 ═══ STEP 3 — SCORE, CONFIDENCE, FRAMING ═══
 
-▸ score (continuous bias intensity, -1.0 to +1.0):
-    +1.0  = strongly aligned with chosen label
-    +0.5  = clear alignment with some balancing elements
-     0.0  = label fits weakly, near-neutral
-    -0.5  = article actively pushes AGAINST the label's typical framing
-    -1.0  = strong counter-framing
-    
-    For label='neutral', score must be in [-0.2, +0.2].
+▸ score (continuous bias intensity toward the chosen label, -1.0 to +1.0):
+    +1.0  strongly aligned with the chosen label
+    +0.5  clear alignment with some balancing elements
+     0.0  label fits weakly, near-neutral
+    -0.5  article actively pushes AGAINST the label's typical framing
+    -1.0  strong counter-framing
+    For label='neutral', score MUST be 0.0.
 
 ▸ confidence (be especially cautious without sibling articles):
-    0.9-1.0  Multiple strong indicators converge
-    0.7-0.89 Clear lean with 1-2 solid indicators
-    0.5-0.69 Detectable lean, indicators are subtle or partial
-    0.2-0.49 Weak/ambiguous — prefer 'neutral' instead
-    < 0.2    DO NOT USE. If genuinely uncertain, choose 'neutral' with confidence 0.5-0.7.
-
-  IMPORTANT: Single-article classification is harder than comparative.
-  Calibrate confidence DOWN by ~0.1 versus comparative mode, unless
-  evidence is overwhelming.
+    0.9-1.0  multiple strong indicators converge
+    0.7-0.89 clear lean with 1-2 solid indicators
+    0.5-0.69 detectable lean; indicators subtle or partial
+    0.2-0.49 weak/ambiguous
+    < 0.2    DO NOT USE.
+    Calibrate confidence DOWN by ~0.1 versus comparative mode, unless evidence is
+    overwhelming. NOTE: a well-supported neutral (balanced sourcing, charged words
+    only in quotes) deserves HIGH confidence — do not under-rate clear neutrality.
 
 ▸ framing (one Arabic sentence):
-    Must NAME THE SOURCE explicitly (e.g., 'الشرق الأوسط', 'العربي الجديد')
-    and cite SPECIFIC EVIDENCE from the article (a quoted phrase, a sourcing
-    pattern, an omission) that supports your chosen label.
+    Must NAME THE SOURCE explicitly (e.g., 'الشرق الأوسط', 'العربي الجديد') and
+    cite SPECIFIC EVIDENCE from the article (a quoted phrase, a sourcing pattern,
+    an omission) that supports the chosen label.
 
   GOOD framing examples:
-    ✓ "تستخدم 'الشرق الأوسط' مصطلح 'الإصلاحات الجريئة' وتعتمد على تصريحات وزارية رسمية دون إيراد منتقدين، مما يعكس إطاراً مؤيّداً للحكومة."
+    ✓ "تستخدم 'الشرق الأوسط' عبارة 'الإصلاحات المنتظرة' وتعتمد تصريحات وزارية رسمية دون إيراد منتقدين، ما يعكس إطاراً مؤيّداً للحكومة."
     ✓ "تركّز 'العربي الجديد' على شهادات معتقلين سابقين وتستخدم مفردات مثل 'القمع الممنهج'، ما يكشف موقعها المعارض."
 
   BAD framing (do not write like this):
@@ -255,13 +309,19 @@ Choose EXACTLY ONE label. Indicators per label:
 
 ═══ OUTPUT FORMAT ═══
 
-Return ONLY a JSON object — no markdown, no commentary, no preamble:
+Return ONLY a JSON object — no markdown, no commentary, no preamble.
+You MUST complete the "analysis" fields BEFORE deciding the final label.
 
 {{
-  "score":      <float -1.0 to +1.0>,
-  "label":      "<one of: pro_government | opposition | neutral | pan_arab | western_aligned>",
-  "confidence": <float 0.0 to 1.0>,
-  "framing":    "<one Arabic sentence naming the source and citing specific evidence>"
+  "analysis": {{
+    "loaded_vocabulary": "<Brief note on found Arabic judgment words or 'none'>",
+    "sourcing_pattern": "<Who is quoted vs who is omitted>",
+    "emphasis_points": "<What was foregrounded in headline/lead>"
+  }},
+  "label": "<one of: pro_government | opposition | neutral | pan_arab | western_aligned>",
+  "score": <float -1.0 to +1.0. For 'neutral', score MUST be 0.0>,
+  "confidence": <float 0.0 to 1.0. High confidence is allowed for clearly balanced neutral reporting>,
+  "framing": "<one Arabic sentence naming the source and citing specific evidence>"
 }}
 """
 

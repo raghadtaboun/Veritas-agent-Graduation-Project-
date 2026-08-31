@@ -1,7 +1,8 @@
 """
 mcp_server/server.py — Veritas Agent MCP Server
 
-Single FastMCP server exposing 19 pure tools (canonical MCP — post Phase 4.5.4).
+Single FastMCP server exposing 15 pure tools (canonical MCP — only the tools
+actually consumed by the agents are retained).
 Runs as an independent process on port 8000 using Streamable HTTP transport.
 All agents call tools through this server exclusively — no agent touches
 PostgreSQL, Redis, GDELT, or scraping infrastructure directly. LLM dispatch
@@ -31,6 +32,7 @@ import re  # noqa: E402
 import httpx  # noqa: E402
 import psycopg2  # noqa: E402
 import redis as redis_lib  # noqa: E402
+import trafilatura  # noqa: E402
 from bs4 import BeautifulSoup  # noqa: E402
 from fastmcp import FastMCP  # noqa: E402
 
@@ -60,7 +62,7 @@ def _db_connect() -> psycopg2.extensions.connection:
 from config.sections import SECTIONS  # noqa: E402
 
 GDELT_API_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
-GDELT_TIMESPAN = "4d"   # Look back 7 days for each pipeline run
+GDELT_TIMESPAN = "2d"   # Look back 1 day for each pipeline run
 
 
 _TTL_GDELT: int = 3_600   # 1 hour — GDELT data changes slowly within a pipeline run
@@ -237,27 +239,137 @@ def _extract_text_from_html(html: str) -> str:
     return soup.get_text(separator=" ", strip=True)
 
 
+# Trafilatura extraction configuration. ``favor_precision=True`` is the
+# critical setting — it removes JS, sidebars, "اقرأ أيضاً" / "الأكثر قراءة"
+# blocks, and other non-article content automatically. The Arabic target
+# language hint biases the precision-mode heuristics toward Arabic prose.
+# Empirically verified on jo24.net, wafa.ps, and shorouknews.com.
+_TRAFILATURA_KWARGS: dict = {
+    "favor_precision": True,
+    "target_language": "ar",
+    "include_comments": False,
+    "include_tables": False,
+    "include_formatting": False,
+}
+
+
+def _trafilatura_extract(html: str) -> str:
+    """
+    Apply the project's standard trafilatura extraction settings to a raw
+    HTML string. Returns the extracted text (possibly empty), or empty
+    string when trafilatura returns None / fails entirely. Never raises.
+    """
+    try:
+        text = trafilatura.extract(html, **_TRAFILATURA_KWARGS)
+    except Exception:
+        return ""
+    return (text or "").strip()
+
+
+# Regex that captures the original source name from libyaakhbar.com articles.
+# The site renders attribution as: مصدر الخبر / <a href="...">SOURCE NAME</a>
+# Tested against live HTML of https://www.libyaakhbar.com/libya-news/2794437.html.
+_AGGREGATOR_SOURCE_RE: re.Pattern = re.compile(
+    r'مصدر الخبر\s*/\s*<a[^>]*>\s*([^<]+?)\s*</a>'
+)
+
+# Domains whose HTML carries a مصدر الخبر attribution line that Trafilatura
+# strips. Extend this list when additional aggregator domains are confirmed.
+_AGGREGATOR_DOMAINS: tuple[str, ...] = ("libyaakhbar.com",)
+
+
+def _extract_aggregator_source(html: str, url: str) -> str | None:
+    """
+    Return the original source name embedded in aggregator pages, or None.
+
+    Checks whether ``url`` belongs to a known aggregator domain (simple
+    substring match, handles www. prefix automatically). If so, searches
+    ``html`` for the first ``مصدر الخبر / <a>…</a>`` pattern and returns
+    the captured source name stripped of surrounding whitespace.
+
+    Returns None when the URL is not from an aggregator, when the pattern
+    is absent (aggregator HTML changed), or on any error — callers must
+    treat None as "no attribution available" and proceed without prepending.
+    Never raises.
+    """
+    try:
+        if not any(domain in url for domain in _AGGREGATOR_DOMAINS):
+            return None
+        match = _AGGREGATOR_SOURCE_RE.search(html)
+        if match:
+            return match.group(1).strip()
+    except Exception:
+        pass
+    return None
+
+
+def _playwright_fetch_html(url: str) -> str:
+    """
+    Synchronous Playwright HTML fetch shared between Layer 2 (trafilatura
+    on a JS-rendered page) and Layer 3 (BS4 safety-net on the same page).
+    Returns the rendered HTML or raises on navigation / launch failure;
+    the caller wraps the call in ``asyncio.to_thread`` and try/except.
+    Browser is always closed in a ``finally`` block.
+    """
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(url, wait_until="networkidle", timeout=30_000)
+            return page.content()
+        finally:
+            browser.close()
+
+
 @mcp.tool()
 async def scrape_article(url: str) -> dict:
     """
-    Fetch the full text of an article using a three-layer fallback strategy.
+    Fetch the full text of an article using a four-layer fallback strategy.
 
-    Layer 1 — Plain HTTP (httpx + BeautifulSoup):
-        Makes a standard GET request with Arabic-language headers and a
-        12-second timeout. Returns extracted text if it exceeds 300 characters.
+    Layer 1 — Plain HTTP + Trafilatura (precision mode):
+        ``httpx`` GET with Arabic-language headers and a 12-second timeout.
+        The raw HTML is passed to ``trafilatura.extract`` with
+        ``favor_precision=True``, which strips JS, sidebars, and "اقرأ
+        أيضاً" / "الأكثر قراءة" blocks. Returns ``method="trafilatura_http"``
+        if the extracted text is ≥ 300 chars.
 
-    Layer 2 — Playwright headless Chromium:
-        Used when Layer 1 fails or returns insufficient content (< 300 chars).
-        Navigates to the URL, waits for networkidle, then extracts the HTML
-        using the same BeautifulSoup logic. Browser is always closed before
-        returning.
+    Layer 2 — Playwright + Trafilatura (precision mode):
+        Used when Layer 1 fails to fetch, or when trafilatura returns
+        less than 300 chars (typical for JS-rendered sites like
+        shorouknews.com). The same precision-mode extraction is applied
+        to the Playwright-rendered HTML. Returns
+        ``method="trafilatura_playwright"``.
 
-    Layer 3 — Title-only fallback:
-        If both layers fail, returns {"success": false, "content": null,
-        "method": "failed"}. The calling agent must store the article with
-        has_full_content = false. Never raises an exception.
+    Layer 3 — BeautifulSoup safety-net fallback:
+        Reuses ``_extract_text_from_html`` on whichever HTML was already
+        fetched in Layer 1 and/or Layer 2 (no redundant network calls).
+        This is the safety net for sites where trafilatura returns None
+        but the heuristic CSS-selector path still finds the body.
+        Returns ``method="bs4_fallback"``.
+
+    Layer 4 — Failed (title-only):
+        If every layer either failed to fetch or produced < 300 chars,
+        returns ``{"success": false, "content": null, "method": "failed",
+        "layer1_error": ..., "layer2_error": ..., "layer3_error": ...}``.
+        The calling agent must store the article with
+        ``has_full_content = false``. Never raises an exception.
+
+    The minimum-content threshold (``_MIN_CONTENT_LEN`` = 300) is applied
+    to every layer's output; below-threshold output triggers the next
+    layer. Success-shape (``success``, ``content``, ``method``) is
+    unchanged from the previous three-layer implementation — only the
+    ``method`` value set expanded to four distinct identifiers
+    (``trafilatura_http``, ``trafilatura_playwright``, ``bs4_fallback``,
+    ``failed``) for observability.
     """
-    # ── Layer 1 — Plain HTTP ──────────────────────────────────────────────────
+    # HTML caches — populated by Layers 1 and 2, consumed by Layer 3 to
+    # avoid redundant network calls.
+    http_html: str = ""
+    playwright_html: str = ""
+
+    # ── Layer 1 — HTTP + Trafilatura (precision) ──────────────────────────────
     layer1_error: str = ""
     try:
         async with httpx.AsyncClient(
@@ -267,51 +379,71 @@ async def scrape_article(url: str) -> dict:
         ) as client:
             response = await client.get(url)
             response.raise_for_status()
-            text = _extract_text_from_html(response.text)
+            http_html = response.text
+
+        text = _trafilatura_extract(http_html)
 
         if len(text) >= _MIN_CONTENT_LEN:
-            return {"success": True, "content": text, "method": "http"}
+            source = _extract_aggregator_source(http_html, url)
+            content = f"المصدر: {source}\n\n{text}" if source else text
+            return {"success": True, "content": content, "method": "trafilatura_http"}
 
         layer1_error = f"insufficient content ({len(text)} chars)"
     except Exception as e:
         layer1_error = str(e)
 
-    # ── Layer 2 — Playwright headless Chromium ────────────────────────────────
+    # ── Layer 2 — Playwright + Trafilatura (precision) ────────────────────────
     layer2_error: str = ""
     try:
-        def _playwright_scrape() -> str:
-            from playwright.sync_api import sync_playwright
-
-            with sync_playwright() as pw:
-                browser = pw.chromium.launch(headless=True)
-                try:
-                    page = browser.new_page()
-                    page.goto(url, wait_until="networkidle", timeout=30_000)
-                    html = page.content()
-                finally:
-                    browser.close()
-
-            return _extract_text_from_html(html)
-
-        text = await asyncio.to_thread(_playwright_scrape)
+        playwright_html = await asyncio.to_thread(_playwright_fetch_html, url)
+        text = _trafilatura_extract(playwright_html)
 
         if len(text) >= _MIN_CONTENT_LEN:
-            return {"success": True, "content": text, "method": "playwright"}
+            source = _extract_aggregator_source(playwright_html, url)
+            content = f"المصدر: {source}\n\n{text}" if source else text
+            return {"success": True, "content": content, "method": "trafilatura_playwright"}
 
         layer2_error = f"insufficient content ({len(text)} chars)"
     except Exception as e:
         layer2_error = str(e)
 
-    # ── Layer 3 — Title-only fallback ─────────────────────────────────────────
-    # Both layers failed. Return the canonical failure dict so the calling
-    # agent stores the article with has_full_content = false instead of
-    # discarding it.
+    # ── Layer 3 — BeautifulSoup safety-net fallback ───────────────────────────
+    # Operates on HTML already fetched above — no new network calls. Tries
+    # the HTTP HTML first (cheaper, plain markup), then falls back to the
+    # Playwright HTML if available.
+    layer3_error: str = ""
+    try:
+        bs4_text: str = ""
+        if http_html:
+            candidate = _extract_text_from_html(http_html)
+            if len(candidate) >= _MIN_CONTENT_LEN:
+                bs4_text = candidate
+        if not bs4_text and playwright_html:
+            candidate = _extract_text_from_html(playwright_html)
+            if len(candidate) >= _MIN_CONTENT_LEN:
+                bs4_text = candidate
+
+        if bs4_text:
+            return {"success": True, "content": bs4_text, "method": "bs4_fallback"}
+
+        if not http_html and not playwright_html:
+            layer3_error = "no HTML available (Layers 1 and 2 both failed to fetch)"
+        else:
+            layer3_error = "insufficient content from BeautifulSoup extraction"
+    except Exception as e:
+        layer3_error = str(e)
+
+    # ── Layer 4 — Title-only failure ──────────────────────────────────────────
+    # Every layer either failed to fetch or produced < 300 chars. Return
+    # the canonical failure dict so the calling agent stores the article
+    # with has_full_content = false instead of discarding it.
     return {
         "success": False,
         "content": None,
         "method": "failed",
         "layer1_error": layer1_error,
         "layer2_error": layer2_error,
+        "layer3_error": layer3_error,
     }
 
 
@@ -344,7 +476,6 @@ async def store_article(
     published_at: str,
     embedding: list[float],
     content: str | None = None,
-    source_id: int | None = None,
     entities: dict | None = None,
     has_full_content: bool = True,
 ) -> dict:
@@ -389,10 +520,10 @@ async def store_article(
                 cur.execute(
                     """
                     INSERT INTO articles
-                        (title, content, url, source_id, section,
+                        (title, content, url, section,
                          published_at, embedding, entities, has_full_content)
                     VALUES
-                        (%s, %s, %s, %s, %s,
+                        (%s, %s, %s, %s,
                          %s, %s::vector, %s::jsonb, %s)
                     ON CONFLICT (url) DO NOTHING
                     RETURNING id
@@ -401,7 +532,6 @@ async def store_article(
                         title,
                         content,
                         url,
-                        source_id,
                         section,
                         published_at_dt,
                         embedding_pg,
@@ -593,90 +723,7 @@ async def cache_get(key: str) -> dict:
 # TIER-2 TOOLS  (Step 4.1)
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Tier-2 Tool 1 — get_source_bias ──────────────────────────────────────────
-
-@mcp.tool()
-async def get_source_bias(domain: str) -> dict:
-    """
-    Retrieve a news source's pre-labeled political bias from the sources table.
-
-    Accepts a domain name (e.g. "aljazeera.net") and returns the full source
-    record from the pre-seeded sources table.
-
-    Returns {"name": str, "domain": str, "bias_label": str} on success.
-    Returns {"error": str, "bias_label": None} if the domain is not found.
-    Never raises an exception.
-    """
-    clean_domain = domain.lower().strip()
-
-    def _sync() -> dict:
-        conn = _db_connect()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT name, domain, bias_label FROM sources WHERE domain = %s",
-                (clean_domain,),
-            )
-            row = cur.fetchone()
-            if row:
-                return {"name": row[0], "domain": row[1], "bias_label": row[2]}
-            return {
-                "error": f"Source not found for domain: '{domain}'",
-                "bias_label": None,
-            }
-        finally:
-            conn.close()
-
-    try:
-        return await asyncio.to_thread(_sync)
-    except Exception as e:
-        return {"error": str(e), "bias_label": None}
-
-
-# ── Tier-2 Tool 2 — get_coverage_stats ───────────────────────────────────────
-
-@mcp.tool()
-async def get_coverage_stats(event_id: int) -> dict:
-    """
-    Count articles per bias label for a given event.
-
-    Joins article_events with bias_scores to produce a coverage distribution.
-    Only articles that have a bias score are counted — unclassified articles
-    are excluded.
-
-    Returns {"event_id": int, "stats": {"label": count, ...}, "total": int}.
-    Returns an empty stats dict if the event has no classified articles.
-    Never raises an exception.
-    """
-    def _sync() -> dict:
-        conn = _db_connect()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT bs.label, COUNT(*) AS cnt
-                FROM article_events ae
-                JOIN bias_scores bs ON bs.article_id = ae.article_id
-                WHERE ae.event_id = %s
-                GROUP BY bs.label
-                ORDER BY cnt DESC
-                """,
-                (event_id,),
-            )
-            rows = cur.fetchall()
-            stats = {label: int(cnt) for label, cnt in rows}
-            total = sum(stats.values())
-            return {"event_id": event_id, "stats": stats, "total": total}
-        finally:
-            conn.close()
-
-    try:
-        return await asyncio.to_thread(_sync)
-    except Exception as e:
-        return {"error": str(e), "event_id": event_id, "stats": {}, "total": 0}
-
-
-# ── Tier-2 Tool 3 — detect_blindspot ─────────────────────────────────────────
+# ── Tier-2 Tool 1 — detect_blindspot ─────────────────────────────────────────
 
 _ALL_BIAS_LABELS: tuple[str, ...] = (
     "pro_government", "opposition", "neutral", "pan_arab", "western_aligned",
@@ -899,49 +946,6 @@ async def vector_recommend(
             "error":           str(e),
             "article_id":      article_id,
             "recommendations": [],
-        }
-
-
-# ── Tier-2 Tool 6 — get_user_profile ─────────────────────────────────────────
-
-@mcp.tool()
-async def get_user_profile(user_id: str) -> dict:
-    """
-    Retrieve a user's reading bias profile from Redis.
-
-    The profile is stored under the key user_profile:{user_id} as a JSON
-    string. External services write this key when a user reads articles —
-    the typical shape is {"dominant_bias": str, "read_counts": {...}}.
-
-    If the key does not exist, returns a default empty profile with
-    dominant_bias=None and read_counts={}.
-
-    Returns {"user_id": str, "dominant_bias": str|None, "read_counts": {...}}.
-    Never raises an exception.
-    """
-    redis_key = f"user_profile:{user_id}"
-    try:
-        raw: str | None = await asyncio.to_thread(  # type: ignore[assignment]
-            _redis_client.get, redis_key
-        )
-        if raw:
-            profile: dict = json.loads(raw)
-            return {
-                "user_id":       user_id,
-                "dominant_bias": profile.get("dominant_bias"),
-                "read_counts":   profile.get("read_counts", {}),
-            }
-        return {
-            "user_id":       user_id,
-            "dominant_bias": None,
-            "read_counts":   {},
-        }
-    except Exception as e:
-        return {
-            "user_id":       user_id,
-            "dominant_bias": None,
-            "read_counts":   {},
-            "error":         str(e),
         }
 
 
@@ -1249,32 +1253,6 @@ async def update_event_summary(
         return await asyncio.to_thread(_sync)
     except Exception as e:
         return {"error": str(e), "updated": False}
-
-
-@mcp.tool()
-async def get_event_article_count(event_id: int) -> dict:
-    """
-    Return the number of article_events rows linked to the given event.
-
-    Returns {"count": int}. Never raises an exception (Rule 2.4).
-    """
-    def _sync() -> dict:
-        conn = _db_connect()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT COUNT(*) FROM article_events WHERE event_id = %s",
-                (event_id,),
-            )
-            row = cur.fetchone()
-            return {"count": int(row[0]) if row else 0}
-        finally:
-            conn.close()
-
-    try:
-        return await asyncio.to_thread(_sync)
-    except Exception as e:
-        return {"error": str(e), "count": 0}
 
 
 # ── Group D — Bias Storage ───────────────────────────────────────────────────

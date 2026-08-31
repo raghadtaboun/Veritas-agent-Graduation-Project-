@@ -1,0 +1,669 @@
+{
+  "_metadata": {
+    "generated_at": "2026-06-17T17:55:33.941838+00:00",
+    "dataset": "evaluation/dataset.json",
+    "ground_truth": "evaluation/clustering_ground_truth.json",
+    "thresholds": {
+      "similarity_min": 0.82,
+      "entity_overlap_min": 2,
+      "time_window_hours": 72
+    },
+    "embedding_model": "models/gemini-embedding-001",
+    "entity_task": "entities",
+    "merge_policy": {
+      "strategy": "greedy",
+      "adaptive_threshold": false,
+      "is_production_faithful": true,
+      "adaptive_cosine_floor": 0.8,
+      "adaptive_entity_min": 6,
+      "note": "Default (greedy / non-adaptive) reproduces ClusteringAgent.run() exactly. 'components' (order-independent connected components) and adaptive_threshold (strong-entity lower cosine floor) are evaluation-only experiments and change no production code."
+    },
+    "note": "Read-only harness. Reuses production thresholds, _entity_overlap, entity prompt, and embedding path by import; clustering orchestration reproduced in-memory (no DB writes). Cosine computed exactly (vs pgvector HNSW approximate).",
+    "preprocessing": {
+      "articles_total": 60,
+      "articles_with_embedding": 60,
+      "articles_with_entities": 60,
+      "clusters_formed": 9,
+      "singletons": 38,
+      "note": "Clustering requires BOTH an embedding (Conditions 1-2) and extracted entities (Condition 3). Articles missing either cannot cluster. A low articles_with_entities count indicates the Gemini free-tier quota was exhausted during preprocessing — re-run after the daily quota resets; the local preprocess cache preserves completed work."
+    }
+  },
+  "overall": {
+    "groups_total": 10,
+    "groups_correct": 8,
+    "hard_groups": {
+      "ids": [
+        4,
+        6,
+        7
+      ],
+      "total": 3,
+      "correct": 2,
+      "detail": {
+        "4": "grouped",
+        "6": "split",
+        "7": "grouped"
+      }
+    },
+    "pairwise": {
+      "articles_considered": 23,
+      "true_positive_pairs": 12,
+      "false_positive_pairs": 0,
+      "false_negative_pairs": 4,
+      "precision": 1.0,
+      "recall": 0.75,
+      "f1": 0.8571
+    }
+  },
+  "per_group": [
+    {
+      "group_id": 1,
+      "article_ids": [
+        8,
+        51
+      ],
+      "labels": [
+        "pro_government",
+        "neutral"
+      ],
+      "title_similarity": "identical",
+      "event_topic": "أعلى ما في خيلهم",
+      "is_hard_case": false,
+      "status": "grouped",
+      "cluster_assignment": {
+        "8": "cluster_1",
+        "51": "cluster_1"
+      },
+      "separated_members": [],
+      "missing_from_dataset": []
+    },
+    {
+      "group_id": 2,
+      "article_ids": [
+        14,
+        53
+      ],
+      "labels": [
+        "opposition",
+        "neutral"
+      ],
+      "title_similarity": "reworded",
+      "event_topic": "الميليشيات/المجموعات المسلحة والتسلق على مجاديف الدولة",
+      "is_hard_case": false,
+      "status": "split",
+      "cluster_assignment": {
+        "14": "singleton_14",
+        "53": "singleton_53"
+      },
+      "separated_members": [
+        53
+      ],
+      "missing_from_dataset": []
+    },
+    {
+      "group_id": 3,
+      "article_ids": [
+        18,
+        52
+      ],
+      "labels": [
+        "opposition",
+        "neutral"
+      ],
+      "title_similarity": "identical",
+      "event_topic": "أمة كغثاء السيل - الشمال ينتفض",
+      "is_hard_case": false,
+      "status": "grouped",
+      "cluster_assignment": {
+        "18": "cluster_3",
+        "52": "cluster_3"
+      },
+      "separated_members": [],
+      "missing_from_dataset": []
+    },
+    {
+      "group_id": 4,
+      "article_ids": [
+        20,
+        9,
+        54
+      ],
+      "labels": [
+        "opposition",
+        "pro_government",
+        "neutral"
+      ],
+      "title_similarity": "different",
+      "event_topic": "ملف مرفأ بيروت / العدالة والمقاومة / تحت سقف القانون",
+      "is_hard_case": true,
+      "status": "grouped",
+      "cluster_assignment": {
+        "20": "cluster_2",
+        "9": "cluster_2",
+        "54": "cluster_2"
+      },
+      "separated_members": [],
+      "missing_from_dataset": []
+    },
+    {
+      "group_id": 5,
+      "article_ids": [
+        21,
+        56
+      ],
+      "labels": [
+        "opposition",
+        "neutral"
+      ],
+      "title_similarity": "identical",
+      "event_topic": "شكراً فخامة الرئيس",
+      "is_hard_case": false,
+      "status": "grouped",
+      "cluster_assignment": {
+        "21": "cluster_4",
+        "56": "cluster_4"
+      },
+      "separated_members": [],
+      "missing_from_dataset": []
+    },
+    {
+      "group_id": 6,
+      "article_ids": [
+        24,
+        10,
+        59
+      ],
+      "labels": [
+        "opposition",
+        "pro_government",
+        "neutral"
+      ],
+      "title_similarity": "different",
+      "event_topic": "الوضع في ليبيا (فوضى / استقرار / تحديات)",
+      "is_hard_case": true,
+      "status": "split",
+      "cluster_assignment": {
+        "24": "singleton_24",
+        "10": "singleton_10",
+        "59": "singleton_59"
+      },
+      "separated_members": [
+        10,
+        59
+      ],
+      "missing_from_dataset": []
+    },
+    {
+      "group_id": 7,
+      "article_ids": [
+        35,
+        57
+      ],
+      "labels": [
+        "pan_arab",
+        "neutral"
+      ],
+      "title_similarity": "different",
+      "event_topic": "الهجوم على قطر / التصعيد الأخير",
+      "is_hard_case": true,
+      "status": "grouped",
+      "cluster_assignment": {
+        "35": "cluster_8",
+        "57": "cluster_8"
+      },
+      "separated_members": [],
+      "missing_from_dataset": []
+    },
+    {
+      "group_id": 8,
+      "article_ids": [
+        38,
+        28
+      ],
+      "labels": [
+        "western_aligned",
+        "pan_arab"
+      ],
+      "title_similarity": "identical",
+      "event_topic": "الضربة في جنوب غزة - عناصر حماس",
+      "is_hard_case": false,
+      "status": "grouped",
+      "cluster_assignment": {
+        "38": "cluster_5",
+        "28": "cluster_5"
+      },
+      "separated_members": [],
+      "missing_from_dataset": []
+    },
+    {
+      "group_id": 9,
+      "article_ids": [
+        42,
+        33
+      ],
+      "labels": [
+        "western_aligned",
+        "pan_arab"
+      ],
+      "title_similarity": "identical",
+      "event_topic": "احتلال غزة يغير وجه إسرائيل",
+      "is_hard_case": false,
+      "status": "grouped",
+      "cluster_assignment": {
+        "42": "cluster_6",
+        "33": "cluster_6"
+      },
+      "separated_members": [],
+      "missing_from_dataset": []
+    },
+    {
+      "group_id": 10,
+      "article_ids": [
+        55,
+        45,
+        34
+      ],
+      "labels": [
+        "neutral",
+        "western_aligned",
+        "pan_arab"
+      ],
+      "title_similarity": "identical",
+      "event_topic": "صراع الممرات بين طريق الحرير وطريق ترامب",
+      "is_hard_case": false,
+      "status": "grouped",
+      "cluster_assignment": {
+        "55": "cluster_7",
+        "45": "cluster_7",
+        "34": "cluster_7"
+      },
+      "separated_members": [],
+      "missing_from_dataset": []
+    }
+  ],
+  "pairwise_diagnostics": [
+    {
+      "group_id": 1,
+      "is_hard_case": false,
+      "title_similarity": "identical",
+      "pairs": [
+        {
+          "pair": [
+            8,
+            51
+          ],
+          "cosine": 0.8966,
+          "cosine_pass": true,
+          "shared_entities": 5,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        }
+      ]
+    },
+    {
+      "group_id": 2,
+      "is_hard_case": false,
+      "title_similarity": "reworded",
+      "pairs": [
+        {
+          "pair": [
+            14,
+            53
+          ],
+          "cosine": 0.7481,
+          "cosine_pass": false,
+          "shared_entities": 1,
+          "entity_overlap_pass": false,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": false,
+          "same_cluster_predicted": false,
+          "failed_gates": [
+            "cosine_below_threshold",
+            "entity_overlap_below_min"
+          ]
+        }
+      ]
+    },
+    {
+      "group_id": 3,
+      "is_hard_case": false,
+      "title_similarity": "identical",
+      "pairs": [
+        {
+          "pair": [
+            18,
+            52
+          ],
+          "cosine": 0.8369,
+          "cosine_pass": true,
+          "shared_entities": 4,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        }
+      ]
+    },
+    {
+      "group_id": 4,
+      "is_hard_case": true,
+      "title_similarity": "different",
+      "pairs": [
+        {
+          "pair": [
+            20,
+            9
+          ],
+          "cosine": 0.8421,
+          "cosine_pass": true,
+          "shared_entities": 3,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        },
+        {
+          "pair": [
+            20,
+            54
+          ],
+          "cosine": 0.8456,
+          "cosine_pass": true,
+          "shared_entities": 5,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        },
+        {
+          "pair": [
+            9,
+            54
+          ],
+          "cosine": 0.8888,
+          "cosine_pass": true,
+          "shared_entities": 3,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        }
+      ]
+    },
+    {
+      "group_id": 5,
+      "is_hard_case": false,
+      "title_similarity": "identical",
+      "pairs": [
+        {
+          "pair": [
+            21,
+            56
+          ],
+          "cosine": 0.8907,
+          "cosine_pass": true,
+          "shared_entities": 15,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        }
+      ]
+    },
+    {
+      "group_id": 6,
+      "is_hard_case": true,
+      "title_similarity": "different",
+      "pairs": [
+        {
+          "pair": [
+            24,
+            10
+          ],
+          "cosine": 0.807,
+          "cosine_pass": false,
+          "shared_entities": 11,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": false,
+          "same_cluster_predicted": false,
+          "failed_gates": [
+            "cosine_below_threshold"
+          ]
+        },
+        {
+          "pair": [
+            24,
+            59
+          ],
+          "cosine": 0.7316,
+          "cosine_pass": false,
+          "shared_entities": 1,
+          "entity_overlap_pass": false,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": false,
+          "same_cluster_predicted": false,
+          "failed_gates": [
+            "cosine_below_threshold",
+            "entity_overlap_below_min"
+          ]
+        },
+        {
+          "pair": [
+            10,
+            59
+          ],
+          "cosine": 0.7837,
+          "cosine_pass": false,
+          "shared_entities": 1,
+          "entity_overlap_pass": false,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": false,
+          "same_cluster_predicted": false,
+          "failed_gates": [
+            "cosine_below_threshold",
+            "entity_overlap_below_min"
+          ]
+        }
+      ]
+    },
+    {
+      "group_id": 7,
+      "is_hard_case": true,
+      "title_similarity": "different",
+      "pairs": [
+        {
+          "pair": [
+            35,
+            57
+          ],
+          "cosine": 0.9033,
+          "cosine_pass": true,
+          "shared_entities": 16,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        }
+      ]
+    },
+    {
+      "group_id": 8,
+      "is_hard_case": false,
+      "title_similarity": "identical",
+      "pairs": [
+        {
+          "pair": [
+            38,
+            28
+          ],
+          "cosine": 0.8764,
+          "cosine_pass": true,
+          "shared_entities": 4,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        }
+      ]
+    },
+    {
+      "group_id": 9,
+      "is_hard_case": false,
+      "title_similarity": "identical",
+      "pairs": [
+        {
+          "pair": [
+            42,
+            33
+          ],
+          "cosine": 0.9158,
+          "cosine_pass": true,
+          "shared_entities": 3,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        }
+      ]
+    },
+    {
+      "group_id": 10,
+      "is_hard_case": false,
+      "title_similarity": "identical",
+      "pairs": [
+        {
+          "pair": [
+            55,
+            45
+          ],
+          "cosine": 0.9651,
+          "cosine_pass": true,
+          "shared_entities": 9,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        },
+        {
+          "pair": [
+            55,
+            34
+          ],
+          "cosine": 0.9272,
+          "cosine_pass": true,
+          "shared_entities": 7,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        },
+        {
+          "pair": [
+            45,
+            34
+          ],
+          "cosine": 0.9387,
+          "cosine_pass": true,
+          "shared_entities": 6,
+          "entity_overlap_pass": true,
+          "same_section": true,
+          "within_72h": true,
+          "would_merge": true,
+          "same_cluster_predicted": true,
+          "failed_gates": []
+        }
+      ]
+    }
+  ],
+  "cluster_assignments": {
+    "1": "singleton_1",
+    "2": "singleton_2",
+    "3": "singleton_3",
+    "4": "singleton_4",
+    "5": "singleton_5",
+    "6": "singleton_6",
+    "7": "singleton_7",
+    "8": "cluster_1",
+    "9": "cluster_2",
+    "10": "singleton_10",
+    "11": "singleton_11",
+    "12": "singleton_12",
+    "13": "singleton_13",
+    "14": "singleton_14",
+    "15": "singleton_15",
+    "16": "singleton_16",
+    "17": "singleton_17",
+    "18": "cluster_3",
+    "19": "singleton_19",
+    "20": "cluster_2",
+    "21": "cluster_4",
+    "22": "singleton_22",
+    "23": "singleton_23",
+    "24": "singleton_24",
+    "25": "singleton_25",
+    "26": "singleton_26",
+    "27": "singleton_27",
+    "28": "cluster_5",
+    "29": "singleton_29",
+    "30": "singleton_30",
+    "31": "singleton_31",
+    "32": "singleton_32",
+    "33": "cluster_6",
+    "34": "cluster_7",
+    "35": "cluster_8",
+    "36": "cluster_8",
+    "37": "singleton_37",
+    "38": "cluster_5",
+    "39": "cluster_9",
+    "40": "cluster_9",
+    "41": "singleton_41",
+    "42": "cluster_6",
+    "43": "singleton_43",
+    "44": "singleton_44",
+    "45": "cluster_7",
+    "46": "singleton_46",
+    "47": "singleton_47",
+    "48": "singleton_48",
+    "49": "cluster_4",
+    "50": "singleton_50",
+    "51": "cluster_1",
+    "52": "cluster_3",
+    "53": "singleton_53",
+    "54": "cluster_2",
+    "55": "cluster_7",
+    "56": "cluster_4",
+    "57": "cluster_8",
+    "58": "singleton_58",
+    "59": "singleton_59",
+    "60": "singleton_60"
+  }
+}

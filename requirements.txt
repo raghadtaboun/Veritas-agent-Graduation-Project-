@@ -69,13 +69,13 @@ langsmith==0.7.26
 markdown-it-py==4.0.0
 MarkupSafe==3.0.3
 mcp==1.27.0
-mistralai==2.4.0
+mistralai>=2.4.0
 mdurl==0.1.2
 more-itertools==11.0.1
 narwhals==2.19.0
 numpy==2.4.4
 openapi-pydantic==0.5.1
-opentelemetry-api==1.40.0
+opentelemetry-api>=1.39.1,<2.0.0
 orjson==3.11.8
 ormsgpack==1.12.2
 packaging==26.0
@@ -85,6 +85,7 @@ pgvector==0.4.2
 pillow==12.2.0
 platformdirs==4.9.4
 playwright==1.58.0
+plotly>=5.0,<6
 pluggy==1.6.0
 proto-plus==1.27.2
 protobuf==5.29.6
@@ -128,6 +129,7 @@ tenacity==9.1.4
 toml==0.10.2
 tornado==6.5.5
 tqdm==4.67.3
+trafilatura>=2.0.0,<3.0.0
 typer==0.24.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
@@ -141,3 +143,4 @@ websockets==16.0
 xxhash==3.6.0
 zipp==3.23.0
 zstandard==0.25.0
+hijridate==2.3.0

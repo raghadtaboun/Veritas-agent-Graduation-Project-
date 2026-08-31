@@ -68,28 +68,72 @@ _EMPTY_ENTITIES: dict[str, list[str]] = {
 # `extract_entities`. Arabic-media domain knowledge is encoded here and
 # MUST NOT be paraphrased. Source: git commit c977c09 (pre-4.5.4 server).
 
-_RELEVANCE_PROMPT_TEMPLATE = (
-    "You are a news relevance classifier for an Arabic media analysis system.\n"
-    "News section: '{section_label}' (key: {section})\n"
-    "Article title: {title}\n\n"
-    "Does this title belong to the news section above?\n"
-    "Reply with a JSON object and nothing else — no markdown, no extra text:\n"
-    '{{"relevant": true, "reason": "one sentence in English"}}\n'
-    "or\n"
-    '{{"relevant": false, "reason": "one sentence in English"}}'
-)
+_RELEVANCE_PROMPT_TEMPLATE = """\
+You are a news relevance classifier for an Arabic media analysis system.
+
+═══ INPUT ═══
+
+News section: '{section_label}' (key: {section})
+Article title: {title}
+
+═══ TASK ═══
+
+Determine whether this title belongs to the specified news section.
+  ▸ المهمّة: حدّد ما إذا كان هذا العنوان ينتمي إلى القسم الإخباري المحدّد.
+
+═══ CLASSIFICATION GUIDELINES ═══
+
+- Consider the topic, geography, and subject matter of the title.
+  (ضع في الاعتبار الموضوع والجغرافيا ومحتوى العنوان)
+- A title is relevant if its primary focus matches the section's scope.
+  (العنوان ذو صلة إذا كان تركيزه الأساسي يتوافق مع نطاق القسم)
+
+═══ OUTPUT FORMAT ═══
+
+Return ONLY a JSON object — no markdown, no extra text.
+
+If relevant:
+{{"relevant": true, "reason": "one sentence in English"}}
+
+If not relevant:
+{{"relevant": false, "reason": "one sentence in English"}}"""
 
 _ENTITY_PROMPT_TEMPLATE = """\
-You are a named-entity extraction system for Arabic news articles (the output should be in Arabic).
-Extract all named entities from the text below and return ONLY a JSON object
-with exactly these three keys. Values are lists of Arabic-language strings.
-Return empty lists if no entities are found for a category.
-Do not include markdown, code fences, or any text outside the JSON.
+You are a named-entity extraction system for Arabic news articles.
 
-Required format:
-{{"people": ["name1", "name2"], "locations": ["loc1"], "organizations": ["org1"]}}
+═══ TASK ═══
 
-Text:
+Extract all named entities from the text below.
+  ▸ المهمّة: استخرج جميع الكيانات المُسمّاة من النص أدناه.
+
+═══ ENTITY CATEGORIES ═══
+
+1. PEOPLE (أشخاص) — Names of individuals mentioned in the article.
+   ▸ أسماء الأفراد المذكورين في المقالة.
+
+2. LOCATIONS (مواقع) — Names of places, cities, countries, regions.
+   ▸ أسماء الأماكن والمدن والدول والمناطق.
+
+3. ORGANIZATIONS (منظمات) — Names of companies, institutions, parties, groups.
+   ▸ أسماء الشركات والمؤسسات والأحزاب والجماعات.
+
+═══ RULES ═══
+
+- Output entity names in Arabic.
+  (أخرج أسماء الكيانات بالعربية)
+- Return empty lists if no entities are found for a category.
+  (أعد قوائم فارغة إذا لم تُوجد كيانات في فئة ما)
+- Do NOT include markdown, code fences, or any text outside the JSON.
+  (لا تُدرج markdown أو أكواد أو أي نص خارج الـ JSON)
+
+═══ OUTPUT FORMAT ═══
+
+Return ONLY a JSON object with exactly these three keys:
+
+{{"people": ["اسم1", "اسم2"], "locations": ["موقع1"], "organizations": ["منظمة1"]}}
+
+═══ TEXT ═══
+
 {text}"""
 
 

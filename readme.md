@@ -4,6 +4,8 @@
 > **نظام وكلاء الذكاء الاصطناعي للتحقق من الأخبار العربية وتحليل الانحياز الإعلامي**
 >
 > Graduation Project — Multi-Agent System + Model Context Protocol
+>
+> **Architecture version:** Canonical MCP (post Phase 4.5 migration). See `docs/decisions/ADR-001-canonical-mcp-migration.md` for the migration rationale and `docs/archive/pre_canonical_mcp/` for the preserved original architecture.
 
 ---
 
@@ -21,7 +23,7 @@ The system follows the **canonical MCP pattern**: a single MCP server exposes pu
 
 **Contribution 2 — Stateful Multi-Agent Graph:** LangGraph is used to define the six agents as nodes in a directed graph with a shared `NewsState` object. This makes each stage independently testable, observable, and restartable.
 
-**Contribution 3 — Arabic Media Bias Analysis:** The system classifies political bias using five labels designed for the Arab media context, rather than applying Western-centric political categories. The classification accuracy is formally evaluated against a 60-article manually annotated Arabic dataset with weighted F1-Score as the primary metric.
+**Contribution 3 — Arabic Media Bias Analysis:** The system classifies political bias using five labels designed for the Arab media context, rather than applying Western-centric political categories. The classification accuracy is formally evaluated against a 60-article manually annotated Arabic dataset with accuracy and macro-F1 as the primary metrics.
 
 ---
 
@@ -42,16 +44,16 @@ The system follows the **canonical MCP pattern**: a single MCP server exposes pu
 |---|---|---|
 | Agent Orchestration | LangGraph | Stateful directed agent graph with shared `NewsState` |
 | MCP Protocol | FastMCP (Python SDK) | Streamable HTTP server exposing 19 pure tools |
-| Primary LLM (client-side) | Gemini 2.0 Flash, fallback to 2.5 Flash and 1.5 Flash | Bias classification, entity extraction, summarization, fact extraction |
+| Primary LLM (client-side) | `gemma-4-31b-it` (served via the Gemini / Google GenAI API) | Bias classification, entity extraction, summarization, fact extraction |
 | Fast LLM (client-side) | Groq + Llama 3.3 70B | Relevance checking (high-volume, low-cost) |
-| Embeddings (client-side) | Gemini `text-embedding-004` | 768-dimension semantic vectors |
+| Embeddings (client-side) | Gemini `models/gemini-embedding-001` | 768-dimension semantic vectors |
 | Database | PostgreSQL 16 + pgvector | Relational + vector search in one system |
 | Cache | Redis | LLM response caching, pipeline results, rate limit control |
 | News Source | GDELT DOC API | Free, unlimited Arabic news aggregation |
 | Backend API | FastAPI | REST API — reads from Redis cache first, falls back to PostgreSQL |
 | Frontend | Streamlit | Interactive analysis dashboard — connects to FastAPI only |
 
-All LLM services use free-tier APIs. A centralized client-side fallback chain (in `agents/llm_client.py`) cascades through Gemini models on 429 / quota errors. Redis caching (via MCP tools `cache_get` / `cache_set`) is used aggressively to stay within daily request limits.
+All LLM services use free-tier APIs. A centralized client-side dispatch layer (in `agents/llm_client.py`) routes every generation task through a per-task fallback chain that currently resolves to `gemma-4-31b-it`; resilience on 429 / quota errors is provided by an eight-key round-robin pool with per-key quarantine. Redis caching (via MCP tools `cache_get` / `cache_set`) is used aggressively to stay within daily request limits.
 
 ---
 
@@ -69,10 +71,6 @@ veritas-agent/
 ├── requirements.txt                 ← Pinned Python dependencies.
 ├── .env                             ← Environment variables (not committed to git).
 ├── .gitignore                       ← Must include .env and __pycache__.
-├── scheduler.py                     ← Automated pipeline trigger. Each section runs on its
-│                                       own update_every_hours schedule defined in
-│                                       config/sections.py (Libya: 4h, others: 6h).
-│
 ├── mcp_server/
 │   └── server.py                    ← FastMCP server. All 19 PURE tools defined here.
 │                                       No LLM calls live in this file — data access
@@ -119,7 +117,7 @@ veritas-agent/
 │                                       GOOGLE_API_KEY / GOOGLE_GENAI_API_KEY from the
 │                                       shell, loads .env with override=True, validates
 │                                       required keys. Imported at every process entry point
-│                                       (mcp_server/server.py, api/main.py, scheduler.py,
+│                                       (mcp_server/server.py, api/main.py,
 │                                       tests/conftest.py) BEFORE any google.genai or groq
 │                                       import.
 │
@@ -150,9 +148,12 @@ veritas-agent/
 │
 ├── evaluation/
 │   ├── dataset.json                 ← 60 manually annotated Arabic articles (research artifact).
-│   └── evaluate.py                  ← Computes F1-Score against human labels via sklearn.
-│                                       Uses BiasAgent.classify_single() which now calls
-│                                       Gemini directly via the client-side fallback chain.
+│   ├── clustering_ground_truth.json ← 10 same-event groups over 23 articles (research artifact).
+│   ├── evaluate_bias.py             ← Bias model-size comparison. Reuses the production bias
+│   │                                   prompt (imported from agents/bias_agent.py) and runs it
+│   │                                   across multiple Gemma sizes + a hosted gemini-3.5-flash
+│   │                                   reference; reports accuracy + macro-F1 vs human labels.
+│   └── evaluate_clustering.py       ← Clustering correctness (pairwise P/R/F1) vs ground truth.
 │
 └── summaries/
     ├── phase_0/
@@ -269,7 +270,7 @@ The MCP server contains **no LLM calls**. Every tool performs only data access, 
 | `libya` | أخبار ليبيا | Every 4 hours | Up to 50 |
 | `world` | أخبار العالم | Every 6 hours | Up to 75 |
 
-Each section's update interval is defined in the `update_every_hours` key of its entry in `config/sections.py`. The scheduler reads this value independently for each section and triggers the pipeline on the schedule specific to that section.
+Each section's update interval is defined in the `update_every_hours` key of its entry in `config/sections.py`. This value is informational — a recommended refresh cadence. The pipeline is triggered manually via `run_pipeline(section)`; there is no automated scheduler.
 
 ---
 
@@ -331,10 +332,9 @@ Follow the phases in `plan.md` in strict sequence. Do not skip Phase 0. The corr
 1. Start PostgreSQL
 2. Start Redis
 3. Start the MCP server: `python mcp_server/server.py`
-4. Run the scheduler for continuous operation, or trigger the pipeline manually for a single section during development and testing:
+4. Trigger the pipeline manually for a section:
 
 ```bash
-# Manual single-section trigger (useful during development and testing)
 python -c "
 import asyncio
 from agents.graph import run_pipeline
@@ -347,7 +347,7 @@ asyncio.run(run_pipeline('libya'))
 The project uses a centralized environment bootstrap to prevent conflicts with system-level `GOOGLE_API_KEY` variables. Every Python entry point must import it **before** any SDK:
 
 ```python
-# At the very top of mcp_server/server.py, api/main.py, scheduler.py,
+# At the very top of mcp_server/server.py, api/main.py,
 # agents/graph.py, and tests/conftest.py
 from config.env_bootstrap import bootstrap_env
 bootstrap_env()
@@ -358,7 +358,11 @@ bootstrap_env()
 
 ## Evaluation
 
-The system is evaluated against a 60-article manually annotated dataset in `evaluation/dataset.json`. The evaluation script computes a weighted F1-Score using `sklearn`. The academic target is F1 ≥ 0.65, which is the honest, achievable threshold given current LLM limitations on Arabic media content — not an inflated claim.
+The system is evaluated on two dimensions in Phase 6:
+
+**Bias classification accuracy** — `evaluation/evaluate_bias.py` runs the 60-article annotated dataset (`evaluation/dataset.json`) through the production bias prompt (imported verbatim from `agents/bias_agent.py`) and computes accuracy and macro-F1. The evaluation spans multiple Gemma model sizes (plus a hosted `gemini-3.5-flash` reference) to produce a model-size comparison. The academic target is F1 ≥ 0.65, which is the honest, achievable threshold given current LLM limitations on Arabic media content.
+
+**Clustering correctness** — `evaluation/evaluate_clustering.py` runs the same dataset articles through the production clustering logic and verifies that the known same-event groups in `evaluation/clustering_ground_truth.json` are placed into a single cluster despite differing bias labels. Special attention is given to hard cases where same-event articles have different titles, testing semantic clustering over surface title matching.
 
 ---
 

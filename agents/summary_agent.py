@@ -59,19 +59,20 @@ _TTL_NEUTRAL_SUMMARY: int = 86_400     # 24 h
 _TTL_BIAS_ASSESSMENT: int = 259_200    # 72 h
 
 # ── LLM budgets ──────────────────────────────────────────────────────────────
-_FACTS_MAX_TOKENS:     int = 2048
-_SUMMARY_MAX_TOKENS:   int = 2048
-_ASSESSMENT_MAX_TOKENS: int = 2048
+_FACTS_MAX_TOKENS:     int = 4096
+_SUMMARY_MAX_TOKENS:   int = 4096
+_ASSESSMENT_MAX_TOKENS: int = 4096
 _GEN_TEMPERATURE:      float = 0.2
 
 # ── Per-article character budgets (Rule 2.9) ─────────────────────────────────
-_MAX_FACTS_ARTICLES:        int = 10
+_MAX_FACTS_ARTICLES:        int = 100
 _TOTAL_FACTS_BUDGET:        int = 3000
 _MAX_FACTS_PER_ARTICLE:     int = 800
-_MAX_TITLE_CHARS:           int = 200
-_MAX_FRAMING_CHARS:         int = 200
-_MAX_ASSESSMENT_TITLE_CHARS: int = 100
-_PROMPT_TRUNCATE:           int = 3000
+_MAX_TITLE_CHARS:           int = 2000
+_MAX_FRAMING_CHARS:         int = 2000
+_MAX_ASSESSMENT_TITLE_CHARS: int = 1000
+_PROMPT_TRUNCATE:           int = 10000
+_FALLBACK_CONTENT_CHARS:    int = 1500   # per-article cap when facts are absent
 
 
 # ── Prompt templates ─────────────────────────────────────────────────────────
@@ -81,75 +82,128 @@ _PROMPT_TRUNCATE:           int = 3000
 # paraphrased.
 
 _FACTS_PROMPT_TEMPLATE = """\
-You are a fact-extraction system for Arabic news analysis (the output should be in Arabic).
+You are a fact-extraction system for Arabic news analysis.
 
 The following articles all cover the same news event from different sources.
-Identify facts that appear in AT LEAST TWO of the articles (shared facts).
+Your task is to identify shared facts that appear in AT LEAST TWO of the articles.
+
+═══ DEFINITION — WHAT IS A FACT ═══
+
 A fact is a verifiable claim about a person, place, event, or outcome.
-Omit editorial opinions, framing, and speculation.
+  ▸ القاعدة: الحقيقة هي ادّعاء قابل للتحقّق يتعلّق بشخص أو مكان أو حدث أو نتيجة.
+
+═══ WHAT TO EXCLUDE ═══
+
+- Editorial opinions (الآراء التحريرية)
+- Framing and interpretations (التأطير والتفسيرات)
+- Speculation and predictions (التكهّنات والتوقّعات)
+- Claims that appear in only ONE article (الادّعاءات التي تظهر في مقالة واحدة فقط)
+
+═══ OUTPUT FORMAT ═══
 
 Return ONLY a JSON array of fact strings in Arabic.
 No markdown, no code fences, no extra text.
-Example: ["الحقيقة الأولى", "الحقيقة الثانية"]
+
+Example output:
+["الحقيقة الأولى", "الحقيقة الثانية"]
+
+═══ ARTICLES ═══
 
 {articles_text}"""
 
 _NEUTRAL_SUMMARY_PROMPT = """\
-You are a neutral Arabic news summarizer (the output should be in Arabic). Your ONLY task is to write one paragraph.
+You are a neutral Arabic news summarizer.
+Your ONLY task is to write one paragraph in Arabic.
 
-Shared facts from multiple sources covering the same news event:
+═══ INPUT — SHARED FACTS ═══
+
+The following facts were extracted from multiple sources covering the same news event:
 {facts_text}
 
-Write a SINGLE paragraph in Arabic that summarizes these facts objectively.
+═══ TASK — SUMMARIZE OBJECTIVELY ═══
 
-STRICT RULES:
-- Do NOT use politically framed, partisan, or biased language of any kind.
-- Base your summary ONLY on the listed facts — add no information beyond them.
-- Write exactly ONE paragraph. No headers, no bullet points, no markdown.
-Return only the paragraph text.\
+Write a SINGLE paragraph in Arabic that summarizes these facts objectively.
+  ▸ المهمّة: اكتب فقرة واحدة بالعربية تلخّص هذه الحقائق بموضوعية تامّة.
+
+═══ STRICT RULES ═══
+
+1. NO BIASED LANGUAGE — Do NOT use politically framed, partisan, or biased language of any kind.
+   ▸ القاعدة: لا تستخدم لغة منحازة أو حزبية أو ذات تأطير سياسي.
+
+2. FACTS ONLY — Base your summary ONLY on the listed facts — add no information beyond them.
+   ▸ القاعدة: استند فقط إلى الحقائق المذكورة — لا تُضِف معلومات من خارجها.
+
+3. FORMAT — Write exactly ONE paragraph. No headers, no bullet points, no markdown.
+   ▸ القاعدة: اكتب فقرة واحدة فقط. بدون عناوين أو نقاط أو تنسيق.
+
+═══ OUTPUT FORMAT ═══
+
+Return ONLY the paragraph text in Arabic — nothing else.\
 """
 
 _BIAS_ASSESSMENT_PROMPT = """\
-أنت محلل تحيّز إعلامي متخصص في تغطية الأخبار العربية. مهمتك تحليل كيف تُؤطّر مصادر مختلفة نفس الحدث الإخباري.
+You are a media bias analyst specialized in Arabic news coverage.
+Your task is to analyze how different sources frame the same news event.
 
-المقالات التالية تغطّي حدثاً واحداً من مصادر مختلفة:
+═══ INPUT — ARTICLES ═══
+
+The following articles cover one event from different sources:
 {articles_text}
 
-اكتب تحليلاً مقارناً بالعربية الفصحى (3-5 جمل) يوضّح اختلاف التأطير بين المصادر. التزم بالمعايير التالية:
+═══ TASK — COMPARATIVE ANALYSIS ═══
 
-## 1. التسمية الصريحة
-- اذكر اسم كل مصدر صراحةً (مثل: "الجزيرة"، "العربية"، "بي بي سي عربي"، "RT عربية")
-- لا تستخدم تعابير مبهمة مثل "بعض المصادر" أو "مصادر أخرى"
+Write a comparative analysis in formal Arabic (3-5 sentences) showing how framing differs between sources.
+  ▸ المهمّة: اكتب تحليلاً مقارناً بالعربية الفصحى (3-5 جمل) يوضّح اختلاف التأطير بين المصادر.
 
-## 2. تحديد الميل الأيديولوجي
-- حدّد طبيعة الميل (مؤيد لطرف، معارض لطرف، حياد ظاهر، انتقاء انتقائي)
-- اربط الميل بالسردية الكبرى (مثل: قومية عربية، موالاة للنظام، توافق مع المنظور الغربي، معارضة)
+═══ RULE 1 — EXPLICIT NAMING ═══
 
-## 3. تقديم أدلّة محدّدة
-لكل مصدر، اذكر دليلاً واحداً على الأقل من النص:
-- مفردات مُحمَّلة (loaded language) — استخدم اقتباساً قصيراً بين علامتي تنصيص '...'
-- اختيار المصادر المُستشهَد بها (إسرائيلية، إيرانية، أمريكية، رسمية، معارضة)
-- ما الذي يُبرز وما الذي يُهمَل
-- الزاوية المُختارة للقصة (عسكرية، إنسانية، سياسية، اقتصادية)
+Name each source explicitly (e.g., "الجزيرة", "العربية", "بي بي سي عربي", "RT عربية").
+Do NOT use vague expressions like "بعض المصادر" or "مصادر أخرى".
+  ▸ القاعدة: اذكر اسم كل مصدر صراحةً — لا تستخدم تعابير مبهمة.
 
-## 4. المقارنة المباشرة
-- استخدم روابط واضحة: "في المقابل"، "بينما"، "على النقيض من ذلك"
-- لا تذكر مصدراً معزولاً بدون مقارنته بآخر
+═══ RULE 2 — IDENTIFY IDEOLOGICAL LEAN ═══
 
-## 5. الحدود والتحفّظ الأكاديمي
-- لا تدّعِ يقيناً يتجاوز ما يدعمه النص
-- إذا كانت المقالات تتشابه في التغطية، قل ذلك صراحةً
-- لا تأخذ موقفاً سياسياً — حلّل التأطير، لا تحكم على الحدث
+Identify the nature of the lean (pro-party, anti-party, apparent neutrality, selective framing).
+Link the lean to the broader narrative (pan-Arab nationalism, pro-regime, Western-aligned, opposition).
+  ▸ القاعدة: حدّد طبيعة الميل واربطه بالسردية الكبرى.
 
-## 6. الشكل
-- 3-5 جمل عربية فصحى أكاديمية
-- لا عناوين، لا قوائم، لا markdown
-- لا تذكر "هذا تحليل..." أو "في الختام..." — ادخل مباشرة في التحليل
+═══ RULE 3 — PROVIDE SPECIFIC EVIDENCE ═══
 
-## مثال على المخرَج المطلوب
-"تظهر الجزيرة ميلاً واضحاً لدعم السردية الفلسطينية، إذ تستخدم مصطلح 'العدوان' لوصف العمليات الإسرائيلية وتُبرز الخسائر المدنية في غزة كعنصر مركزي في القصة، مع اقتباسات مكثّفة من مصادر فلسطينية رسمية. في المقابل، تتبنّى العربية إطاراً أمنياً، إذ تُركّز على 'تهديد حماس' وتعتمد على بيانات الجيش الإسرائيلي والمحلّلين الأمنيين الإقليميين. أما بي بي سي عربي، فتحاول تقديم تغطية متوازنة شكلياً عبر إيراد الروايتين، لكنها تُفصّل في الموقف الأمريكي والأوروبي أكثر من الموقف العربي، ما يعكس انحيازاً ضمنياً نحو المنظور الغربي."
+For each source, cite at least ONE piece of evidence from the text:
+- Loaded language — use short quotes in '...'
+  (مفردات مُحمَّلة — استخدم اقتباساً قصيراً بين علامتي تنصيص)
+- Source selection (Israeli, Iranian, American, official, opposition)
+  (اختيار المصادر المُستشهَد بها)
+- What is emphasized vs. omitted
+  (ما الذي يُبرز وما الذي يُهمَل)
+- Story angle (military, humanitarian, political, economic)
+  (الزاوية المُختارة للقصة)
 
-اكتب التحليل المقارن الآن. ابدأ مباشرة بالتحليل دون مقدمات:
+═══ RULE 4 — DIRECT COMPARISON ═══
+
+Use clear linking phrases: "في المقابل", "بينما", "على النقيض من ذلك".
+Do NOT mention a source in isolation without comparing it to another.
+  ▸ القاعدة: لا تذكر مصدراً معزولاً بدون مقارنته بآخر.
+
+═══ RULE 5 — ACADEMIC RESTRAINT ═══
+
+- Do NOT claim certainty beyond what the text supports.
+  (لا تدّعِ يقيناً يتجاوز ما يدعمه النص)
+- If articles are similar in coverage, state this explicitly.
+  (إذا كانت المقالات تتشابه في التغطية، قل ذلك صراحةً)
+- Do NOT take a political stance — analyze framing, do NOT judge the event.
+  (لا تأخذ موقفاً سياسياً — حلّل التأطير، لا تحكم على الحدث)
+
+═══ OUTPUT FORMAT ═══
+
+- 3-5 formal Arabic academic sentences
+- No headers, no lists, no markdown
+- Do NOT write "هذا تحليل..." or "في الختام..." — start directly with the analysis
+
+Example output:
+"تظهر الجزيرة ميلاً واضحاً لدعم السردية الفلسطينية، إذ تستخدم مصطلح 'العدوان' لوصف العمليات الإسرائيلية وتُبرز الخسائر المدنية في غزة كعنصر مركزي في القصة، مع اقتباسات مكثّفة من مصادر فلسطينية رسمية. في المقابل، تتبنّى العربية إطاراً أمنياً، إذ تُركّز على 'تهديد حماس' وتعتمد على بيانات الجيش الإسرائيلي والمحلّلين الأمنيين الإقليميين."
+
+Write the comparative analysis now. Start directly with the analysis — no preamble:
 """
 
 
@@ -238,6 +292,8 @@ class SummaryAgent(MCPAgent):
             neutral_summary, ns_err = await self._generate_neutral_summary(
                 event_id=event_id,
                 facts=facts,
+                articles_meta=articles_meta,
+                content_by_id=content_by_id,
             )
             if ns_err:
                 errors.append(ns_err)
@@ -377,11 +433,23 @@ class SummaryAgent(MCPAgent):
         self,
         event_id: int,
         facts: list[str],
+        articles_meta: list[dict[str, Any]] | None = None,
+        content_by_id: dict[int, str] | None = None,
     ) -> tuple[str, str | None]:
         """Build a neutral Arabic paragraph from *facts*.
 
-        Returns ``(summary, error_str_or_None)``. Empty facts list returns
-        ``("", None)`` — not an error, just nothing to summarise.
+        Primary path: when *facts* is non-empty, formats them as bullet points.
+        Fallback path: when *facts* is empty AND *articles_meta* + *content_by_id*
+        are provided, builds the summary input from the first 2 articles' raw
+        content (title + 1500 chars each). This covers the common case where
+        ``_extract_facts`` failed due to a transient LLM error.
+        No-data path: when *facts* is empty AND no content args are given, returns
+        ``("", None)`` — preserves backward compatibility with callers that omit
+        the new parameters.
+
+        The cache key ``f"neutral_summary:{event_id}"`` and cache write logic are
+        unchanged — a cached result satisfies any future call regardless of which
+        path produced it.
         """
         cache_key = f"neutral_summary:{event_id}"
 
@@ -390,9 +458,26 @@ class SummaryAgent(MCPAgent):
             return str(cached["value"]), None
 
         if not facts:
-            return "", None
+            if not articles_meta or not content_by_id:
+                return "", None
 
-        facts_text = "\n".join(f"- {f}" for f in facts[:50])
+            # Fallback: build summary input from raw article content
+            blocks: list[str] = []
+            for meta in articles_meta[:2]:
+                aid = int(meta.get("id", 0))
+                title = (meta.get("title") or "")[:_MAX_TITLE_CHARS]
+                content = (content_by_id.get(aid, "") or "")[:_FALLBACK_CONTENT_CHARS]
+                blocks.append(f"{title}\n\n{content}")
+            facts_text = "\n\n---\n\n".join(blocks)
+            if not facts_text.strip():
+                return "", None
+            logger.info(
+                "[SummaryAgent._generate_neutral_summary] event %d: facts empty, "
+                "falling back to article content (used %d article(s))",
+                event_id, len(blocks),
+            )
+        else:
+            facts_text = "\n".join(f"- {f}" for f in facts[:50])
         prompt = _NEUTRAL_SUMMARY_PROMPT.format(facts_text=facts_text)
         prompt = prompt[:_PROMPT_TRUNCATE]
 

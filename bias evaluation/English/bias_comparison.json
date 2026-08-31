@@ -1,0 +1,527 @@
+{
+  "gemma-4b": {
+    "accuracy": 0.6,
+    "macro_f1": 0.585,
+    "total": 60,
+    "correct": 36,
+    "parse_errors": 0,
+    "per_label": {
+      "pro_government": {
+        "precision": 0.6154,
+        "recall": 0.6667,
+        "f1": 0.64,
+        "support": 12
+      },
+      "opposition": {
+        "precision": 0.6429,
+        "recall": 0.75,
+        "f1": 0.6923,
+        "support": 12
+      },
+      "neutral": {
+        "precision": 0.5333,
+        "recall": 0.6667,
+        "f1": 0.5926,
+        "support": 12
+      },
+      "pan_arab": {
+        "precision": 0.6667,
+        "recall": 0.6667,
+        "f1": 0.6667,
+        "support": 12
+      },
+      "western_aligned": {
+        "precision": 0.5,
+        "recall": 0.25,
+        "f1": 0.3333,
+        "support": 12
+      }
+    },
+    "confusion_matrix": {
+      "pro_government": {
+        "pro_government": 8,
+        "opposition": 0,
+        "neutral": 2,
+        "pan_arab": 1,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "opposition": {
+        "pro_government": 1,
+        "opposition": 9,
+        "neutral": 0,
+        "pan_arab": 1,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "neutral": {
+        "pro_government": 1,
+        "opposition": 1,
+        "neutral": 8,
+        "pan_arab": 2,
+        "western_aligned": 0,
+        "parse_error": 0
+      },
+      "pan_arab": {
+        "pro_government": 0,
+        "opposition": 3,
+        "neutral": 0,
+        "pan_arab": 8,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "western_aligned": {
+        "pro_government": 3,
+        "opposition": 1,
+        "neutral": 5,
+        "pan_arab": 0,
+        "western_aligned": 3,
+        "parse_error": 0
+      }
+    },
+    "confusion_matrix_columns": [
+      "pro_government",
+      "opposition",
+      "neutral",
+      "pan_arab",
+      "western_aligned",
+      "parse_error"
+    ],
+    "model": "gemma-4b",
+    "params": "4B",
+    "model_identifier": "gemma4:e4b-mlx",
+    "backend": "ollama"
+  },
+  "_metadata": {
+    "generated_at": "2026-06-16T09:50:35.252279+00:00",
+    "dataset": "evaluation/dataset.json",
+    "articles_evaluated": 12,
+    "labels": [
+      "pro_government",
+      "opposition",
+      "neutral",
+      "pan_arab",
+      "western_aligned"
+    ],
+    "models": {
+      "gemma-4b": {
+        "backend": "ollama",
+        "model": "gemma4:e4b-mlx",
+        "params": "4B"
+      },
+      "gemma-12b": {
+        "backend": "ollama",
+        "model": "gemma4:12b-mlx",
+        "params": "12B"
+      },
+      "gemma-26b": {
+        "backend": "ollama",
+        "model": "gemma4:26b",
+        "params": "26B"
+      },
+      "gemma-31b": {
+        "backend": "ollama",
+        "model": "gemma4:31b-mlx",
+        "params": "31B"
+      },
+      "gemma-12b-qat": {
+        "backend": "ollama",
+        "model": "gemma4:12b-it-qat",
+        "params": "12B-QAT"
+      },
+      "gemma-4b-qat": {
+        "backend": "ollama",
+        "model": "gemma4:e4b-it-qat",
+        "params": "4B-QAT"
+      },
+      "gemma-26b-qat": {
+        "backend": "ollama",
+        "model": "gemma4:26b-a4b-it-qat",
+        "params": "26B-QAT"
+      },
+      "gemma-31b-qat": {
+        "backend": "ollama",
+        "model": "gemma4:31b-it-qat",
+        "params": "31B-QAT"
+      },
+      "gemini-3.5-flash": {
+        "backend": "aistudio_flash",
+        "model": "gemini-3.5-flash",
+        "params": "Flash"
+      }
+    },
+    "note": "macro_f1 = unweighted mean of per-label F1 over the 5 labels; parse_error predictions count as incorrect."
+  },
+  "gemma-12b": {
+    "accuracy": 0.75,
+    "macro_f1": 0.7437,
+    "total": 60,
+    "correct": 45,
+    "parse_errors": 0,
+    "per_label": {
+      "pro_government": {
+        "precision": 0.75,
+        "recall": 0.75,
+        "f1": 0.75,
+        "support": 12
+      },
+      "opposition": {
+        "precision": 0.8889,
+        "recall": 0.6667,
+        "f1": 0.7619,
+        "support": 12
+      },
+      "neutral": {
+        "precision": 0.6,
+        "recall": 0.5,
+        "f1": 0.5455,
+        "support": 12
+      },
+      "pan_arab": {
+        "precision": 0.7333,
+        "recall": 0.9167,
+        "f1": 0.8148,
+        "support": 12
+      },
+      "western_aligned": {
+        "precision": 0.7857,
+        "recall": 0.9167,
+        "f1": 0.8462,
+        "support": 12
+      }
+    },
+    "confusion_matrix": {
+      "pro_government": {
+        "pro_government": 9,
+        "opposition": 0,
+        "neutral": 2,
+        "pan_arab": 0,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "opposition": {
+        "pro_government": 2,
+        "opposition": 8,
+        "neutral": 0,
+        "pan_arab": 1,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "neutral": {
+        "pro_government": 1,
+        "opposition": 1,
+        "neutral": 6,
+        "pan_arab": 3,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "pan_arab": {
+        "pro_government": 0,
+        "opposition": 0,
+        "neutral": 1,
+        "pan_arab": 11,
+        "western_aligned": 0,
+        "parse_error": 0
+      },
+      "western_aligned": {
+        "pro_government": 0,
+        "opposition": 0,
+        "neutral": 1,
+        "pan_arab": 0,
+        "western_aligned": 11,
+        "parse_error": 0
+      }
+    },
+    "confusion_matrix_columns": [
+      "pro_government",
+      "opposition",
+      "neutral",
+      "pan_arab",
+      "western_aligned",
+      "parse_error"
+    ],
+    "model": "gemma-12b",
+    "params": "12B",
+    "model_identifier": "gemma4:12b-mlx",
+    "backend": "ollama"
+  },
+  "gemma-26b": {
+    "accuracy": 0.6833,
+    "macro_f1": 0.682,
+    "total": 60,
+    "correct": 41,
+    "parse_errors": 0,
+    "per_label": {
+      "pro_government": {
+        "precision": 0.8,
+        "recall": 0.6667,
+        "f1": 0.7273,
+        "support": 12
+      },
+      "opposition": {
+        "precision": 0.6923,
+        "recall": 0.75,
+        "f1": 0.72,
+        "support": 12
+      },
+      "neutral": {
+        "precision": 0.4615,
+        "recall": 0.5,
+        "f1": 0.48,
+        "support": 12
+      },
+      "pan_arab": {
+        "precision": 0.7857,
+        "recall": 0.9167,
+        "f1": 0.8462,
+        "support": 12
+      },
+      "western_aligned": {
+        "precision": 0.7,
+        "recall": 0.5833,
+        "f1": 0.6364,
+        "support": 12
+      }
+    },
+    "confusion_matrix": {
+      "pro_government": {
+        "pro_government": 8,
+        "opposition": 1,
+        "neutral": 3,
+        "pan_arab": 0,
+        "western_aligned": 0,
+        "parse_error": 0
+      },
+      "opposition": {
+        "pro_government": 1,
+        "opposition": 9,
+        "neutral": 0,
+        "pan_arab": 1,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "neutral": {
+        "pro_government": 0,
+        "opposition": 2,
+        "neutral": 6,
+        "pan_arab": 2,
+        "western_aligned": 2,
+        "parse_error": 0
+      },
+      "pan_arab": {
+        "pro_government": 0,
+        "opposition": 1,
+        "neutral": 0,
+        "pan_arab": 11,
+        "western_aligned": 0,
+        "parse_error": 0
+      },
+      "western_aligned": {
+        "pro_government": 1,
+        "opposition": 0,
+        "neutral": 4,
+        "pan_arab": 0,
+        "western_aligned": 7,
+        "parse_error": 0
+      }
+    },
+    "confusion_matrix_columns": [
+      "pro_government",
+      "opposition",
+      "neutral",
+      "pan_arab",
+      "western_aligned",
+      "parse_error"
+    ],
+    "model": "gemma-26b",
+    "params": "26B",
+    "model_identifier": "gemma4:26b",
+    "backend": "ollama"
+  },
+  "gemma-31b": {
+    "accuracy": 0.8,
+    "macro_f1": 0.7994,
+    "total": 60,
+    "correct": 48,
+    "parse_errors": 0,
+    "per_label": {
+      "pro_government": {
+        "precision": 0.7692,
+        "recall": 0.8333,
+        "f1": 0.8,
+        "support": 12
+      },
+      "opposition": {
+        "precision": 0.6923,
+        "recall": 0.75,
+        "f1": 0.72,
+        "support": 12
+      },
+      "neutral": {
+        "precision": 0.8,
+        "recall": 0.6667,
+        "f1": 0.7273,
+        "support": 12
+      },
+      "pan_arab": {
+        "precision": 0.8462,
+        "recall": 0.9167,
+        "f1": 0.88,
+        "support": 12
+      },
+      "western_aligned": {
+        "precision": 0.9091,
+        "recall": 0.8333,
+        "f1": 0.8696,
+        "support": 12
+      }
+    },
+    "confusion_matrix": {
+      "pro_government": {
+        "pro_government": 10,
+        "opposition": 1,
+        "neutral": 1,
+        "pan_arab": 0,
+        "western_aligned": 0,
+        "parse_error": 0
+      },
+      "opposition": {
+        "pro_government": 2,
+        "opposition": 9,
+        "neutral": 0,
+        "pan_arab": 1,
+        "western_aligned": 0,
+        "parse_error": 0
+      },
+      "neutral": {
+        "pro_government": 1,
+        "opposition": 1,
+        "neutral": 8,
+        "pan_arab": 1,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "pan_arab": {
+        "pro_government": 0,
+        "opposition": 1,
+        "neutral": 0,
+        "pan_arab": 11,
+        "western_aligned": 0,
+        "parse_error": 0
+      },
+      "western_aligned": {
+        "pro_government": 0,
+        "opposition": 1,
+        "neutral": 1,
+        "pan_arab": 0,
+        "western_aligned": 10,
+        "parse_error": 0
+      }
+    },
+    "confusion_matrix_columns": [
+      "pro_government",
+      "opposition",
+      "neutral",
+      "pan_arab",
+      "western_aligned",
+      "parse_error"
+    ],
+    "model": "gemma-31b",
+    "params": "31B",
+    "model_identifier": "gemma4:31b-mlx",
+    "backend": "ollama"
+  },
+  "gemini-3.5-flash": {
+    "accuracy": 0.8,
+    "macro_f1": 0.7995,
+    "total": 60,
+    "correct": 48,
+    "parse_errors": 0,
+    "per_label": {
+      "pro_government": {
+        "precision": 0.7333,
+        "recall": 0.9167,
+        "f1": 0.8148,
+        "support": 12
+      },
+      "opposition": {
+        "precision": 1.0,
+        "recall": 0.6667,
+        "f1": 0.8,
+        "support": 12
+      },
+      "neutral": {
+        "precision": 0.6923,
+        "recall": 0.75,
+        "f1": 0.72,
+        "support": 12
+      },
+      "pan_arab": {
+        "precision": 0.8462,
+        "recall": 0.9167,
+        "f1": 0.88,
+        "support": 12
+      },
+      "western_aligned": {
+        "precision": 0.8182,
+        "recall": 0.75,
+        "f1": 0.7826,
+        "support": 12
+      }
+    },
+    "confusion_matrix": {
+      "pro_government": {
+        "pro_government": 11,
+        "opposition": 0,
+        "neutral": 1,
+        "pan_arab": 0,
+        "western_aligned": 0,
+        "parse_error": 0
+      },
+      "opposition": {
+        "pro_government": 2,
+        "opposition": 8,
+        "neutral": 0,
+        "pan_arab": 1,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "neutral": {
+        "pro_government": 1,
+        "opposition": 0,
+        "neutral": 9,
+        "pan_arab": 1,
+        "western_aligned": 1,
+        "parse_error": 0
+      },
+      "pan_arab": {
+        "pro_government": 0,
+        "opposition": 0,
+        "neutral": 1,
+        "pan_arab": 11,
+        "western_aligned": 0,
+        "parse_error": 0
+      },
+      "western_aligned": {
+        "pro_government": 1,
+        "opposition": 0,
+        "neutral": 2,
+        "pan_arab": 0,
+        "western_aligned": 9,
+        "parse_error": 0
+      }
+    },
+    "confusion_matrix_columns": [
+      "pro_government",
+      "opposition",
+      "neutral",
+      "pan_arab",
+      "western_aligned",
+      "parse_error"
+    ],
+    "model": "gemini-3.5-flash",
+    "params": "Flash",
+    "model_identifier": "gemini-3.5-flash",
+    "backend": "aistudio_flash"
+  }
+}

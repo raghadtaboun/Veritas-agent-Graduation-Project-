@@ -25,13 +25,14 @@ Design constraints enforced (per ``blueprint.md`` Section 9 and
 * **Per-key quarantine.** A 429 / quota error quarantines the offending key
   for 1 hour. The same request retries with the next available key for the
   same model before falling back to the next model tier.
-* **Tiered model strategy.** ``gemini-2.5-flash`` for high-quality tasks
-  (bias, summary, assessment); ``gemini-2.0-flash`` for simpler tasks
-  (entities, facts, general). See ``GEMINI_FALLBACK_CHAIN``.
-* **503 ServerError retry.** ``gemini-2.5-flash`` returns 503 under load.
-  The pool retries 3 times with a 5 s sleep on the *same key* before
-  treating the failure as a model-level issue and advancing the chain.
-  503 does NOT quarantine the key.
+* **Per-task model strategy.** Every task tier (bias, summary, assessment,
+  entities, facts, general) currently resolves to ``gemma-4-31b-it``. See
+  ``GEMINI_FALLBACK_CHAIN``.
+* **Transient server error retry.** ``gemma-4-31b-it`` (and previously
+  ``gemini-2.5-flash``) returns 503 Service Unavailable and 500 INTERNAL
+  under load. The pool retries 3 times with a 5 s sleep on the *same key*
+  before treating the failure as a model-level issue and advancing the
+  chain. Neither 503 nor 500 INTERNAL quarantines the key.
 * **Key masking.** API keys are always logged as ``AIza***xyz``
   (first 4 + last 3 chars). Full keys are never logged under any circumstance.
 * **Concurrency limits.** ``asyncio.Semaphore(4)`` for Gemini,
@@ -39,7 +40,7 @@ Design constraints enforced (per ``blueprint.md`` Section 9 and
 * **Minimum-interval throttle.** 250 ms between consecutive Gemini calls;
   2.1 s between consecutive Groq calls (30 RPM free-tier ceiling). With
   8-key rotation the effective per-key interval is ~2 s — well within the
-  15 RPM limit for gemini-2.0-flash.
+  15 RPM limit for gemma-4-31b-it.
 * **3,000-character truncation** of every prompt / embedding input before
   the API call (Rule 2.9).
 * **Never raises.** All public functions catch every exception and return
@@ -65,7 +66,7 @@ from groq import AsyncGroq
 logger = logging.getLogger(__name__)
 
 # ── Truncation ───────────────────────────────────────────────────────────────
-_MAX_INPUT_CHARS: int = 40_000  # Rule 2.9
+_MAX_INPUT_CHARS: int = 100_000  # Rule 2.9
 
 
 # ── Per-model rate-limit constants ───────────────────────────────────────────
@@ -82,13 +83,13 @@ GEMINI_MODEL_LIMITS: dict[str, dict[str, int]] = {
 }
 
 
-# ── Tiered fallback chains ────────────────────────────────────────────────────
-# High-quality tasks use gemini-2.5-flash first (better Arabic comprehension);
-# simpler tasks go directly to gemini-2.0-flash, which has 75× higher daily
-# quota (1500 RPD vs 20 RPD per key on the Free Tier).
-#
-# gemini-1.5-flash removed entirely — returns 404 NOT_FOUND on this account
-# (confirmed Phase 4.5 Step 4.5.5b / summary.md Section E issue #1).
+# ── Per-task fallback chains ──────────────────────────────────────────────────
+# Every task type currently resolves to a single model, gemma-4-31b-it.
+# Resilience comes from the multi-key round-robin pool (a 429 / quota error
+# rotates to the next key for the same model), not from a multi-model cascade.
+# Earlier Gemini tiers (gemini-2.0-flash / gemini-2.5-flash) were superseded;
+# gemini-1.5-flash was removed earlier as it returns 404 NOT_FOUND on this
+# account (Phase 4.5 Step 4.5.5b / summary.md Section E issue #1).
 GEMINI_FALLBACK_CHAIN: dict[str, list[str]] = {
     "bias":       ["gemma-4-31b-it"],
     "summary":    ["gemma-4-31b-it"],
@@ -197,11 +198,14 @@ def _is_quota_error(exc: BaseException) -> bool:
     )
 
 
-def _is_503_error(exc: BaseException) -> bool:
-    """True when *exc* looks like a transient 503 ServerError.
+def _is_transient_server_error(exc: BaseException) -> bool:
+    """True when *exc* looks like a transient 503 or 500 INTERNAL ServerError.
 
-    Checked *before* ``_is_quota_error`` in the exception handler to ensure
-    mutual exclusivity — a 503 must never trigger key quarantine.
+    503 Service Unavailable and 500 INTERNAL are both server-side transients
+    from Google. Same retry policy applies: 3 attempts × 5 s sleep on the
+    same key, no quarantine. Checked *before* ``_is_quota_error`` in the
+    exception handler to ensure mutual exclusivity — transient errors must
+    never trigger key quarantine.
     """
     msg = str(exc).lower()
     return (
@@ -209,6 +213,8 @@ def _is_503_error(exc: BaseException) -> bool:
         or "service unavailable" in msg
         or "servererror" in msg
         or "server_error" in msg
+        or "500 internal" in msg
+        or "internal error" in msg
     )
 
 
@@ -392,7 +398,7 @@ def _get_groq_client() -> AsyncGroq:
 async def gemini_generate_with_fallback(
     prompt: str,
     task_type: str = "general",
-    max_tokens: int = 2048,
+    max_tokens: int = 4096,
     temperature: float = 0.2,
 ) -> dict[str, Any]:
     """Run a Gemini text-generation call with tiered model fallback and key rotation.
@@ -404,11 +410,12 @@ async def gemini_generate_with_fallback(
     * **Quota failover.** A 429 / resource_exhausted error quarantines the key
       for 1 hour and retries with the next available key for the *same model*
       before advancing to the next model tier in the chain.
-    * **503 retry.** A 503 ServerError retries up to 3 times with a 5 s sleep
-      on the *same key* (it is not the key's fault). If all 3 retries fail, the
-      model tier is exhausted and the chain advances. 503 does not quarantine.
-    * **Non-quota, non-503 errors** return immediately — they indicate a prompt
-      or SDK problem, not a capacity problem.
+    * **Transient retry.** A 503 Service Unavailable or 500 INTERNAL error
+      retries up to 3 times with a 5 s sleep on the *same key* (it is not the
+      key's fault). If all 3 retries fail, the model tier is exhausted and the
+      chain advances. Neither 503 nor 500 INTERNAL quarantines the key.
+    * **Non-quota, non-transient errors** return immediately — they indicate a
+      prompt or SDK problem, not a capacity problem.
     * **All-keys-quarantined** returns a structured error dict (Rule 2.4 —
       never raises).
 
@@ -458,7 +465,7 @@ async def gemini_generate_with_fallback(
             attempted.append(f"{model}/{masked}")
             quota_hit = False
 
-            # ── 503 retry loop (same key, up to 3 attempts) ──────────────────
+            # ── Transient error retry loop (same key, up to 3 attempts) ─────
             for attempt_num in range(1, 4):
                 await _wait_gemini_interval()
 
@@ -490,10 +497,10 @@ async def gemini_generate_with_fallback(
                     }
 
                 except Exception as exc:
-                    if _is_503_error(exc):
+                    if _is_transient_server_error(exc):
                         if attempt_num < 3:
                             logger.warning(
-                                "503 ServerError on %s (attempt %d/3, key=%s)"
+                                "transient server error on %s (attempt %d/3, key=%s)"
                                 " — retrying in 5s",
                                 model, attempt_num, masked,
                             )
@@ -501,12 +508,12 @@ async def gemini_generate_with_fallback(
                             continue  # retry same key, same model
                         else:
                             logger.warning(
-                                "503 ServerError on %s exhausted 3 retries"
+                                "transient server error on %s exhausted 3 retries"
                                 " (key=%s) — advancing to next model",
                                 model, masked,
                             )
                             last_error = (
-                                f"503 after 3 retries on {model} (key={masked})"
+                                f"transient server error after 3 retries on {model} (key={masked})"
                             )
                             skip_to_next_model = True
                             break  # break attempt loop
@@ -563,8 +570,8 @@ async def gemini_embed(text: str) -> dict[str, Any]:
     """Generate a single 768-dim Gemini embedding with pool key rotation.
 
     Uses round-robin key selection from the pool. Quota errors quarantine the
-    key and retry with the next available key. 503 and other errors return
-    immediately with an error dict.
+    key and retry with the next available key. Other errors return immediately
+    with an error dict.
 
     Returns
     -------

@@ -2,15 +2,15 @@
 #
 # This file contains ONLY configuration data. No functions, no imports,
 # no executable logic. All three sections must remain in this single file.
-# The scheduler reads update_every_hours independently per section.
+# update_every_hours: recommended refresh cadence per section (informational; pipeline is triggered manually).
 
 SECTIONS: dict = {
     "middle_east": {
         "label": "أخبار الشرق الأوسط",
-        "query_ar": " فلسطين OR إسرائيل ",
-        "query_en": "Palestine OR Israel",
+        "query_ar": "فلسطين",
+        "query_en": "Palestine",
         # Concise query used directly in GDELT API calls (GDELT is slow with long OR chains)
-        "query_gdelt": "Palestine Israel",
+        "query_gdelt": "Palestine",
         "countries": [],
         "sources": [
             "aljazeera.net",
@@ -25,14 +25,14 @@ SECTIONS: dict = {
             "mayadeen.com",
         ],
         "update_every_hours": 6,
-        "max_articles_per_run": 100,
+        "max_articles_per_run": 70,
     },
 
     "libya": {
         "label": "أخبار ليبيا",
-        "query_ar": "ليبيا OR طرابلس OR بنغازي OR الدبيبة OR حفتر OR المنفي OR الوحدة الوطنية",
-        "query_en": "Libya OR Tripoli OR Benghazi OR Dbeibah OR Haftar OR National Unity",
-        "query_gdelt": "Libya Tripoli Benghazi",
+        "query_ar": "ليبيا",
+        "query_en": "Libya",
+        "query_gdelt": "Libya",
         "countries": ["LY"],
         "sources": [
             "aljazeera.net",
@@ -50,9 +50,9 @@ SECTIONS: dict = {
 
     "world": {
         "label": "أخبار العالم",
-        "query_ar": "أمريكا",
+        "query_ar": "الولايات المتحدة",
         "query_en": "United States",
-        "query_gdelt": "United States ",
+        "query_gdelt": "United States",
         "countries": [],
         "sources": [
             "aljazeera.net",

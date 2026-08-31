@@ -1,16 +1,22 @@
 """
 agents/clustering_agent.py — Clustering Agent (Agent 2) [Canonical MCP rewrite]
 
-Groups articles covering the same real-world event into clusters using three
-conditions that must all be satisfied simultaneously:
+Groups articles covering the same real-world event into clusters using a time
+window plus an entity-aware similarity rule:
 
   Condition 1 — Time Window   : |published_at_A - published_at_B| ≤ 72 hours
-  Condition 2 — Similarity    : cosine_similarity(embedding_A, embedding_B) ≥ 0.82
-  Condition 3 — Entity Overlap: |entities_A ∩ entities_B| ≥ 2
+  Condition 2+3 — Merge rule (either gate is sufficient):
+      Standard : cosine ≥ 0.82 AND |entities_A ∩ entities_B| ≥ 2
+      Adaptive : cosine ≥ 0.80 AND |entities_A ∩ entities_B| ≥ 6
 
-Conditions 1 and 2 are enforced at the SQL level by the `find_similar` MCP
-tool. Condition 3 is evaluated in pure Python on entity data returned by
-the `get_articles` MCP tool.
+Condition 1 and the lower cosine bound (0.80) are enforced at the SQL level by
+the `find_similar` MCP tool, which therefore returns borderline candidates down
+to 0.80. The precise per-candidate merge decision (`_merge_qualifies`) is then
+made in pure Python on the cosine + entity data, so a candidate between 0.80 and
+0.82 is only kept when its entity overlap is very strong (≥ 6). The adaptive gate
+only ever adds merges the standard gate would miss; it was validated on the
+Phase 6 evaluation set (pairwise recall 0.7500 → 0.8125, F1 0.8571 → 0.8966) with
+precision held at a perfect 1.0 (zero false merges).
 
 Architecture (Phase 4.5 canonical):
   - Deterministic — no LLM calls, no ReAct loop, no `think()`.
@@ -47,6 +53,17 @@ logger = logging.getLogger(__name__)
 _SIMILARITY_THRESHOLD: float = 0.82   # Condition 2 — cosine similarity floor
 _ENTITY_OVERLAP_MIN:   int   = 2       # Condition 3 — minimum shared entities
 _FIND_SIMILAR_LIMIT:   int   = 20      # max candidates returned per find_similar
+
+# ── Adaptive (entity-aware) relaxation ────────────────────────────────────────
+# A borderline pair just below the cosine floor is still merged when the entity
+# agreement is very strong, on the principle that overwhelming named-entity
+# overlap is itself strong evidence of the same event. The relaxation is
+# conjunctive and strictly bounded: it never lowers cosine below
+# `_ADAPTIVE_COSINE_FLOOR` and never accepts fewer than `_ADAPTIVE_ENTITY_MIN`
+# shared entities. Validated on the Phase 6 evaluation set (recall 0.7500 →
+# 0.8125, F1 0.8571 → 0.8966) with precision held at 1.0 (zero false merges).
+_ADAPTIVE_COSINE_FLOOR: float = 0.80   # relaxed cosine floor for strong-entity pairs
+_ADAPTIVE_ENTITY_MIN:   int   = 6       # shared-entity count required to relax cosine
 
 
 class ClusteringAgent(MCPAgent):
@@ -146,14 +163,18 @@ class ClusteringAgent(MCPAgent):
                 )
                 continue
 
-            # Conditions 1 & 2 are enforced in SQL by find_similar.
+            # Condition 1 (72h window) and the *lower* cosine bound are enforced in
+            # SQL by find_similar. The floor is the adaptive one (0.80) so that
+            # borderline strong-entity candidates between 0.80 and 0.82 are still
+            # returned; the precise cosine/entity decision is made per-candidate
+            # in Python below via `_merge_qualifies`.
             sim_result = await self.call_tool(
                 "find_similar",
                 {
                     "embedding":    embedding,
                     "section":      section,
                     "published_at": published_at,
-                    "threshold":    _SIMILARITY_THRESHOLD,
+                    "threshold":    _ADAPTIVE_COSINE_FLOOR,
                     "limit":        _FIND_SIMILAR_LIMIT,
                     "exclude_id":   article_id,
                 },
@@ -175,7 +196,10 @@ class ClusteringAgent(MCPAgent):
                 and int(c.get("id", -1)) not in assigned
             ]
 
-            # Condition 3 — entity overlap ≥ 2 (Python filter).
+            # Conditions 2 & 3 — cosine + entity overlap, with the adaptive branch
+            # (Python filter). A candidate merges when it clears the standard gate
+            # (cosine ≥ 0.82 and entities ≥ 2) OR the adaptive gate (cosine ≥ 0.80
+            # and entities ≥ 6).
             members: set[int] = {article_id}
             scores: dict[int, float] = {article_id: 1.0}
             for cand in in_run:
@@ -183,16 +207,17 @@ class ClusteringAgent(MCPAgent):
                 cand_article = article_by_id.get(cand_id)
                 if cand_article is None:
                     continue
+                try:
+                    cand_cos = float(cand.get("similarity", 0.0))
+                except (TypeError, ValueError):
+                    cand_cos = 0.0
                 overlap = _entity_overlap(
                     article.get("entities") or {},
                     cand_article.get("entities") or {},
                 )
-                if overlap >= _ENTITY_OVERLAP_MIN:
+                if _merge_qualifies(cand_cos, overlap):
                     members.add(cand_id)
-                    try:
-                        scores[cand_id] = float(cand.get("similarity", 0.0))
-                    except (TypeError, ValueError):
-                        scores[cand_id] = 0.0
+                    scores[cand_id] = cand_cos
 
             if len(members) >= 2:
                 clusters.append({"members": members, "scores": scores})
@@ -278,6 +303,22 @@ class ClusteringAgent(MCPAgent):
 
 
 # ── Module-level helpers (pure functions — no DB or MCP access) ──────────────
+
+def _merge_qualifies(cosine: float, overlap: int) -> bool:
+    """
+    Decide whether a candidate pair should merge under the adaptive policy.
+
+    Two conjunctive gates, either of which is sufficient:
+      - Standard : cosine ≥ _SIMILARITY_THRESHOLD (0.82) AND overlap ≥ _ENTITY_OVERLAP_MIN (2)
+      - Adaptive : cosine ≥ _ADAPTIVE_COSINE_FLOOR (0.80) AND overlap ≥ _ADAPTIVE_ENTITY_MIN (6)
+
+    The adaptive gate only ever *adds* merges that the standard gate would miss;
+    it never overrides the standard gate's entity requirement at full cosine.
+    """
+    standard = cosine >= _SIMILARITY_THRESHOLD and overlap >= _ENTITY_OVERLAP_MIN
+    adaptive = cosine >= _ADAPTIVE_COSINE_FLOOR and overlap >= _ADAPTIVE_ENTITY_MIN
+    return standard or adaptive
+
 
 def _entity_overlap(entities_a: dict, entities_b: dict) -> int:
     """

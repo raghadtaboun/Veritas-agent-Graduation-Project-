@@ -1,0 +1,79 @@
+{
+  "description": "Ground-truth same-event groups for clustering evaluation. Each group contains articles that report the SAME news event but were written/rewritten with DIFFERENT bias framings.",
+  "annotator": "Raghad Taboun",
+  "total_groups": 10,
+  "total_articles_in_groups": 23,
+  "difficulty_note": "Groups 4, 6, 7 have DIFFERENT titles for the same event (hardest cases — tests semantic clustering, not title matching). Groups 1, 3, 5, 8, 9, 10 share identical titles. Group 2 has a lightly reworded title.",
+  "groups": [
+    {
+      "group_id": 1,
+      "article_ids": [8, 51],
+      "labels": ["pro_government", "neutral"],
+      "title_similarity": "identical",
+      "event_topic": "أعلى ما في خيلهم"
+    },
+    {
+      "group_id": 2,
+      "article_ids": [14, 53],
+      "labels": ["opposition", "neutral"],
+      "title_similarity": "reworded",
+      "event_topic": "الميليشيات/المجموعات المسلحة والتسلق على مجاديف الدولة"
+    },
+    {
+      "group_id": 3,
+      "article_ids": [18, 52],
+      "labels": ["opposition", "neutral"],
+      "title_similarity": "identical",
+      "event_topic": "أمة كغثاء السيل - الشمال ينتفض"
+    },
+    {
+      "group_id": 4,
+      "article_ids": [20, 9, 54],
+      "labels": ["opposition", "pro_government", "neutral"],
+      "title_similarity": "different",
+      "event_topic": "ملف مرفأ بيروت / العدالة والمقاومة / تحت سقف القانون"
+    },
+    {
+      "group_id": 5,
+      "article_ids": [21, 56],
+      "labels": ["opposition", "neutral"],
+      "title_similarity": "identical",
+      "event_topic": "شكراً فخامة الرئيس"
+    },
+    {
+      "group_id": 6,
+      "article_ids": [24, 10, 59],
+      "labels": ["opposition", "pro_government", "neutral"],
+      "title_similarity": "different",
+      "event_topic": "الوضع في ليبيا (فوضى / استقرار / تحديات)"
+    },
+    {
+      "group_id": 7,
+      "article_ids": [35, 57],
+      "labels": ["pan_arab", "neutral"],
+      "title_similarity": "different",
+      "event_topic": "الهجوم على قطر / التصعيد الأخير"
+    },
+    {
+      "group_id": 8,
+      "article_ids": [38, 28],
+      "labels": ["western_aligned", "pan_arab"],
+      "title_similarity": "identical",
+      "event_topic": "الضربة في جنوب غزة - عناصر حماس"
+    },
+    {
+      "group_id": 9,
+      "article_ids": [42, 33],
+      "labels": ["western_aligned", "pan_arab"],
+      "title_similarity": "identical",
+      "event_topic": "احتلال غزة يغير وجه إسرائيل"
+    },
+    {
+      "group_id": 10,
+      "article_ids": [55, 45, 34],
+      "labels": ["neutral", "western_aligned", "pan_arab"],
+      "title_similarity": "identical",
+      "event_topic": "صراع الممرات بين طريق الحرير وطريق ترامب"
+    }
+  ]
+}
